@@ -1,0 +1,13 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: wacrm
+      POSTGRES_PASSWORD: wacrm
+      POSTGRES_DB: wacrm
+    ports:
+      - "5432:5432"
+    volumes:
+      - wacrm_pg:/var/lib/postgresql/data
+volumes:
+  wacrm_pg:

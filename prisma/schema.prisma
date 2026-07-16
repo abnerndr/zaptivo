@@ -1,0 +1,780 @@
+// Prisma schema — Auth.js + CRM domain (ported from supabase/migrations, no RLS)
+// Auth.js Account → auth_accounts; CRM tenant → accounts (model Tenant)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AccountRole {
+  owner
+  admin
+  agent
+  viewer
+
+  @@map("account_role_enum")
+}
+
+// ─── Auth.js ─────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(uuid()) @db.Uuid
+  cpf           String    @unique
+  email         String?   @unique
+  emailVerified DateTime? @map("email_verified")
+  name          String?
+  image         String?
+  passwordHash  String    @map("password_hash")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  accounts Account[]
+  sessions Session[]
+  profile  Profile?
+
+  ownedTenants Tenant[] @relation("TenantOwner")
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(uuid()) @db.Uuid
+  userId            String  @map("user_id") @db.Uuid
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("auth_accounts")
+}
+
+model Session {
+  id           String   @id @default(uuid()) @db.Uuid
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id") @db.Uuid
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ─── Tenancy ─────────────────────────────────────────────────
+
+model Tenant {
+  id               String   @id @default(uuid()) @db.Uuid
+  name             String
+  ownerUserId      String   @map("owner_user_id") @db.Uuid
+  defaultCurrency  String   @default("USD") @map("default_currency")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  owner User @relation("TenantOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+
+  profiles              Profile[]
+  invitations           AccountInvitation[]
+  contacts              Contact[]
+  tags                  Tag[]
+  customFields          CustomField[]
+  conversations         Conversation[]
+  whatsappConfig        WhatsappConfig?
+  messageTemplates      MessageTemplate[]
+  pipelines             Pipeline[]
+  broadcasts            Broadcast[]
+  automations           Automation[]
+  flows                 Flow[]
+  apiKeys               ApiKey[]
+  webhookEndpoints      WebhookEndpoint[]
+  notifications         Notification[]
+  memberPresence        MemberPresence[]
+  aiConfig              AiConfig?
+  aiKnowledgeDocuments  AiKnowledgeDocument[]
+  aiKnowledgeChunks     AiKnowledgeChunk[]
+  aiUsageLogs           AiUsageLog[]
+  quickReplies          QuickReply[]
+
+  @@unique([ownerUserId])
+  @@map("accounts")
+}
+
+model Profile {
+  id            String       @id @default(uuid()) @db.Uuid
+  userId        String       @unique @map("user_id") @db.Uuid
+  accountId     String       @map("account_id") @db.Uuid
+  fullName      String       @map("full_name")
+  email         String
+  avatarUrl     String?      @map("avatar_url")
+  role          String       @default("user") // legacy unused
+  accountRole   AccountRole  @map("account_role")
+  betaFeatures  String[]     @default([]) @map("beta_features")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account Tenant @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, accountRole])
+  @@map("profiles")
+}
+
+model AccountInvitation {
+  id               String      @id @default(uuid()) @db.Uuid
+  accountId        String      @map("account_id") @db.Uuid
+  tokenHash        String      @unique @map("token_hash")
+  role             AccountRole
+  createdByUserId  String?     @map("created_by_user_id") @db.Uuid
+  label            String?
+  createdAt        DateTime    @default(now()) @map("created_at")
+  expiresAt        DateTime    @map("expires_at")
+  acceptedAt       DateTime?   @map("accepted_at")
+  acceptedByUserId String?     @map("accepted_by_user_id") @db.Uuid
+
+  account Tenant @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, expiresAt])
+  @@map("account_invitations")
+}
+
+model MemberPresence {
+  userId     String   @id @map("user_id") @db.Uuid
+  accountId  String   @map("account_id") @db.Uuid
+  status     String   @default("online") // online | away
+  lastSeenAt DateTime @default(now()) @map("last_seen_at")
+
+  account Tenant @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@map("member_presence")
+}
+
+// ─── CRM core ────────────────────────────────────────────────
+
+model Contact {
+  id              String   @id @default(uuid()) @db.Uuid
+  accountId       String   @map("account_id") @db.Uuid
+  userId          String?  @map("user_id") @db.Uuid
+  phone           String
+  phoneNormalized String?  @map("phone_normalized")
+  name            String?
+  email           String?
+  company         String?
+  avatarUrl       String?  @map("avatar_url")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  account       Tenant                 @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  contactTags   ContactTag[]
+  customValues  ContactCustomValue[]
+  notes         ContactNote[]
+  conversations Conversation[]
+  deals         Deal[]
+
+  @@index([accountId])
+  @@index([phone])
+  @@index([accountId, phoneNormalized])
+  @@map("contacts")
+}
+
+model Tag {
+  id        String   @id @default(uuid()) @db.Uuid
+  accountId String   @map("account_id") @db.Uuid
+  userId    String?  @map("user_id") @db.Uuid
+  name      String
+  color     String   @default("#3b82f6")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  account     Tenant       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  contactTags ContactTag[]
+
+  @@index([accountId])
+  @@map("tags")
+}
+
+model ContactTag {
+  id        String   @id @default(uuid()) @db.Uuid
+  contactId String   @map("contact_id") @db.Uuid
+  tagId     String   @map("tag_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, tagId])
+  @@map("contact_tags")
+}
+
+model CustomField {
+  id           String   @id @default(uuid()) @db.Uuid
+  accountId    String   @map("account_id") @db.Uuid
+  userId       String?  @map("user_id") @db.Uuid
+  fieldName    String   @map("field_name")
+  fieldType    String   @default("text") @map("field_type")
+  fieldOptions Json?    @map("field_options")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  account Tenant                @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  values  ContactCustomValue[]
+
+  @@map("custom_fields")
+}
+
+model ContactCustomValue {
+  id            String   @id @default(uuid()) @db.Uuid
+  contactId     String   @map("contact_id") @db.Uuid
+  customFieldId String   @map("custom_field_id") @db.Uuid
+  value         String?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  contact     Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  customField CustomField @relation(fields: [customFieldId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, customFieldId])
+  @@map("contact_custom_values")
+}
+
+model ContactNote {
+  id        String   @id @default(uuid()) @db.Uuid
+  contactId String   @map("contact_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  noteText  String   @map("note_text")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@map("contact_notes")
+}
+
+model Conversation {
+  id                 String    @id @default(uuid()) @db.Uuid
+  accountId          String    @map("account_id") @db.Uuid
+  userId             String?   @map("user_id") @db.Uuid
+  contactId          String    @map("contact_id") @db.Uuid
+  status             String    @default("open") // open | pending | closed
+  assignedAgentId    String?   @map("assigned_agent_id") @db.Uuid
+  lastMessageText    String?   @map("last_message_text")
+  lastMessageAt      DateTime? @map("last_message_at")
+  unreadCount        Int       @default(0) @map("unread_count")
+  aiAutoreplyDisabled Boolean  @default(false) @map("ai_autoreply_disabled")
+  aiReplyCount       Int       @default(0) @map("ai_reply_count")
+  handoffAgentId     String?   @map("handoff_agent_id") @db.Uuid
+  aiHandoffSummary   String?   @map("ai_handoff_summary")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  account  Tenant   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  contact  Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  messages Message[]
+  deals    Deal[]
+
+  @@index([accountId])
+  @@index([contactId])
+  @@map("conversations")
+}
+
+model Message {
+  id                 String   @id @default(uuid()) @db.Uuid
+  conversationId     String   @map("conversation_id") @db.Uuid
+  senderType         String   @map("sender_type") // customer | agent | bot
+  senderId           String?  @map("sender_id") @db.Uuid
+  contentType        String   @default("text") @map("content_type")
+  contentText        String?  @map("content_text")
+  mediaUrl           String?  @map("media_url")
+  templateName       String?  @map("template_name")
+  messageId          String?  @map("message_id") // provider message id
+  status             String   @default("sent")
+  replyToMessageId   String?  @map("reply_to_message_id") @db.Uuid
+  interactiveReplyId String?  @map("interactive_reply_id")
+  interactivePayload Json?    @map("interactive_payload")
+  aiGenerated        Boolean  @default(false) @map("ai_generated")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  conversation Conversation       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  reactions    MessageReaction[]
+
+  @@index([conversationId])
+  @@index([messageId])
+  @@map("messages")
+}
+
+model MessageReaction {
+  id             String   @id @default(uuid()) @db.Uuid
+  messageId      String   @map("message_id") @db.Uuid
+  conversationId String   @map("conversation_id") @db.Uuid
+  actorType      String   @map("actor_type") // customer | agent
+  actorId        String?  @map("actor_id") @db.Uuid
+  emoji          String
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@map("message_reactions")
+}
+
+model QuickReply {
+  id                  String   @id @default(uuid()) @db.Uuid
+  accountId           String   @map("account_id") @db.Uuid
+  userId              String   @map("user_id") @db.Uuid
+  title               String
+  kind                String   @default("text") // text | interactive
+  contentText         String?  @map("content_text")
+  interactivePayload  Json?    @map("interactive_payload")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  account Tenant @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("quick_replies")
+}
+
+// ─── WhatsApp (WAHA) ─────────────────────────────────────────
+
+model WhatsappConfig {
+  id          String    @id @default(uuid()) @db.Uuid
+  accountId   String    @unique @map("account_id") @db.Uuid
+  wahaSession String    @unique @map("waha_session")
+  status      String    @default("STOPPED")
+  displayName String?   @map("display_name")
+  connectedAt DateTime? @map("connected_at")
+  lastError   String?   @map("last_error")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  account Tenant @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("whatsapp_config")
+}
+
+model MessageTemplate {
+  id              String    @id @default(uuid()) @db.Uuid
+  accountId       String    @map("account_id") @db.Uuid
+  userId          String?   @map("user_id") @db.Uuid
+  name            String
+  category        String    @default("Marketing")
+  language        String    @default("pt_BR")
+  headerType      String?   @map("header_type")
+  headerContent   String?   @map("header_content")
+  headerMediaUrl  String?   @map("header_media_url")
+  bodyText        String    @map("body_text")
+  footerText      String?   @map("footer_text")
+  buttons         Json?
+  sampleValues    Json?     @map("sample_values")
+  status          String    @default("DRAFT") // DRAFT | ACTIVE | ARCHIVED
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  account Tenant @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, name, language])
+  @@map("message_templates")
+}
+
+// ─── Pipelines ───────────────────────────────────────────────
+
+model Pipeline {
+  id        String   @id @default(uuid()) @db.Uuid
+  accountId String   @map("account_id") @db.Uuid
+  userId    String?  @map("user_id") @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  account Tenant          @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  stages  PipelineStage[]
+  deals   Deal[]
+
+  @@map("pipelines")
+}
+
+model PipelineStage {
+  id         String   @id @default(uuid()) @db.Uuid
+  pipelineId String   @map("pipeline_id") @db.Uuid
+  name       String
+  position   Int      @default(0)
+  color      String   @default("#3b82f6")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  pipeline Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  deals    Deal[]
+
+  @@index([pipelineId])
+  @@map("pipeline_stages")
+}
+
+model Deal {
+  id                String    @id @default(uuid()) @db.Uuid
+  accountId         String?   @map("account_id") @db.Uuid
+  userId            String?   @map("user_id") @db.Uuid
+  pipelineId        String    @map("pipeline_id") @db.Uuid
+  stageId           String    @map("stage_id") @db.Uuid
+  contactId         String    @map("contact_id") @db.Uuid
+  conversationId    String?   @map("conversation_id") @db.Uuid
+  title             String
+  value             Decimal   @default(0) @db.Decimal(12, 2)
+  currency          String    @default("USD")
+  notes             String?
+  expectedCloseDate DateTime? @map("expected_close_date") @db.Date
+  status            String    @default("active")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  pipeline     Pipeline      @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  stage        PipelineStage @relation(fields: [stageId], references: [id])
+  contact      Contact       @relation(fields: [contactId], references: [id])
+  conversation Conversation? @relation(fields: [conversationId], references: [id])
+
+  @@index([pipelineId])
+  @@index([stageId])
+  @@map("deals")
+}
+
+// ─── Broadcasts ──────────────────────────────────────────────
+
+model Broadcast {
+  id                String    @id @default(uuid()) @db.Uuid
+  accountId         String    @map("account_id") @db.Uuid
+  userId            String?   @map("user_id") @db.Uuid
+  name              String
+  templateName      String    @map("template_name")
+  templateLanguage  String    @default("pt_BR") @map("template_language")
+  templateVariables Json?     @map("template_variables")
+  audienceFilter    Json?     @map("audience_filter")
+  scheduledAt       DateTime? @map("scheduled_at")
+  status            String    @default("draft")
+  totalRecipients   Int       @default(0) @map("total_recipients")
+  sentCount         Int       @default(0) @map("sent_count")
+  deliveredCount    Int       @default(0) @map("delivered_count")
+  readCount         Int       @default(0) @map("read_count")
+  repliedCount      Int       @default(0) @map("replied_count")
+  failedCount       Int       @default(0) @map("failed_count")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  account    Tenant               @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  recipients BroadcastRecipient[]
+
+  @@map("broadcasts")
+}
+
+model BroadcastRecipient {
+  id                String    @id @default(uuid()) @db.Uuid
+  broadcastId       String    @map("broadcast_id") @db.Uuid
+  contactId         String    @map("contact_id") @db.Uuid
+  status            String    @default("pending")
+  whatsappMessageId String?   @map("whatsapp_message_id")
+  sentAt            DateTime? @map("sent_at")
+  deliveredAt       DateTime? @map("delivered_at")
+  readAt            DateTime? @map("read_at")
+  repliedAt         DateTime? @map("replied_at")
+  errorMessage      String?   @map("error_message")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  broadcast Broadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+
+  @@index([broadcastId])
+  @@map("broadcast_recipients")
+}
+
+// ─── Automations ─────────────────────────────────────────────
+
+model Automation {
+  id              String    @id @default(uuid()) @db.Uuid
+  accountId       String    @map("account_id") @db.Uuid
+  userId          String?   @map("user_id") @db.Uuid
+  name            String
+  description     String?
+  triggerType     String    @map("trigger_type")
+  triggerConfig   Json      @default("{}") @map("trigger_config")
+  isActive        Boolean   @default(false) @map("is_active")
+  executionCount  Int       @default(0) @map("execution_count")
+  lastExecutedAt  DateTime? @map("last_executed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  account  Tenant             @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  steps    AutomationStep[]
+  logs     AutomationLog[]
+  pending  AutomationPendingExecution[]
+
+  @@map("automations")
+}
+
+model AutomationStep {
+  id           String   @id @default(uuid()) @db.Uuid
+  automationId String   @map("automation_id") @db.Uuid
+  parentStepId String?  @map("parent_step_id") @db.Uuid
+  branch       String?
+  stepType     String   @map("step_type")
+  stepConfig   Json     @default("{}") @map("step_config")
+  position     Int
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  automation Automation      @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  parent     AutomationStep? @relation("AutomationStepTree", fields: [parentStepId], references: [id], onDelete: Cascade)
+  children   AutomationStep[] @relation("AutomationStepTree")
+
+  @@map("automation_steps")
+}
+
+model AutomationLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  automationId   String   @map("automation_id") @db.Uuid
+  accountId      String?  @map("account_id") @db.Uuid
+  userId         String?  @map("user_id") @db.Uuid
+  contactId      String?  @map("contact_id") @db.Uuid
+  triggerEvent   String   @map("trigger_event")
+  stepsExecuted  Json     @default("[]") @map("steps_executed")
+  status         String
+  errorMessage   String?  @map("error_message")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  automation Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  @@map("automation_logs")
+}
+
+model AutomationPendingExecution {
+  id               String   @id @default(uuid()) @db.Uuid
+  automationId     String   @map("automation_id") @db.Uuid
+  userId           String?  @map("user_id") @db.Uuid
+  contactId        String?  @map("contact_id") @db.Uuid
+  logId            String?  @map("log_id") @db.Uuid
+  parentStepId     String?  @map("parent_step_id") @db.Uuid
+  branch           String?
+  nextStepPosition Int      @map("next_step_position")
+  context          Json     @default("{}")
+  status           String   @default("pending")
+  runAt            DateTime @map("run_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  automation Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  @@index([runAt])
+  @@map("automation_pending_executions")
+}
+
+// ─── Flows ───────────────────────────────────────────────────
+
+model Flow {
+  id              String    @id @default(uuid()) @db.Uuid
+  accountId       String    @map("account_id") @db.Uuid
+  userId          String?   @map("user_id") @db.Uuid
+  name            String
+  description     String?
+  status          String    @default("draft") // draft | active | archived
+  triggerType     String    @map("trigger_type")
+  triggerConfig   Json      @default("{}") @map("trigger_config")
+  entryNodeId     String?   @map("entry_node_id")
+  fallbackPolicy  Json      @default("{\"on_unknown_reply\":\"reprompt\",\"max_reprompts\":2,\"on_timeout_hours\":24,\"on_exhaust\":\"handoff\"}") @map("fallback_policy")
+  executionCount  Int       @default(0) @map("execution_count")
+  lastExecutedAt  DateTime? @map("last_executed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  account Tenant     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  nodes   FlowNode[]
+  runs    FlowRun[]
+
+  @@index([accountId, triggerType])
+  @@map("flows")
+}
+
+model FlowNode {
+  id        String   @id @default(uuid()) @db.Uuid
+  flowId    String   @map("flow_id") @db.Uuid
+  nodeKey   String   @map("node_key")
+  nodeType  String   @map("node_type")
+  config    Json     @default("{}")
+  positionX Int      @default(0) @map("position_x")
+  positionY Int      @default(0) @map("position_y")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  flow Flow @relation(fields: [flowId], references: [id], onDelete: Cascade)
+
+  @@unique([flowId, nodeKey])
+  @@map("flow_nodes")
+}
+
+model FlowRun {
+  id                  String    @id @default(uuid()) @db.Uuid
+  flowId              String    @map("flow_id") @db.Uuid
+  accountId           String?   @map("account_id") @db.Uuid
+  userId              String?   @map("user_id") @db.Uuid
+  contactId           String?   @map("contact_id") @db.Uuid
+  conversationId      String?   @map("conversation_id") @db.Uuid
+  status              String    @default("active")
+  currentNodeKey      String?   @map("current_node_key")
+  lastPromptMessageId String?   @map("last_prompt_message_id") @db.Uuid
+  vars                Json      @default("{}")
+  repromptCount       Int       @default(0) @map("reprompt_count")
+  startedAt           DateTime  @default(now()) @map("started_at")
+  lastAdvancedAt      DateTime  @default(now()) @map("last_advanced_at")
+  endedAt             DateTime? @map("ended_at")
+  endReason           String?   @map("end_reason")
+
+  flow   Flow            @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  events FlowRunEvent[]
+
+  @@index([flowId, startedAt])
+  @@map("flow_runs")
+}
+
+model FlowRunEvent {
+  id        String   @id @default(uuid()) @db.Uuid
+  flowRunId String   @map("flow_run_id") @db.Uuid
+  eventType String   @map("event_type")
+  nodeKey   String?  @map("node_key")
+  payload   Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  flowRun FlowRun @relation(fields: [flowRunId], references: [id], onDelete: Cascade)
+
+  @@map("flow_run_events")
+}
+
+// ─── Platform ────────────────────────────────────────────────
+
+model ApiKey {
+  id         String    @id @default(uuid()) @db.Uuid
+  accountId  String    @map("account_id") @db.Uuid
+  createdBy  String?   @map("created_by") @db.Uuid
+  name       String
+  keyPrefix  String    @map("key_prefix")
+  keyHash    String    @unique @map("key_hash")
+  scopes     String[]  @default([])
+  lastUsedAt DateTime? @map("last_used_at")
+  expiresAt  DateTime? @map("expires_at")
+  revokedAt  DateTime? @map("revoked_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  account Tenant @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("api_keys")
+}
+
+model WebhookEndpoint {
+  id             String    @id @default(uuid()) @db.Uuid
+  accountId      String    @map("account_id") @db.Uuid
+  createdBy      String?   @map("created_by") @db.Uuid
+  url            String
+  secret         String
+  events         String[]  @default([])
+  isActive       Boolean   @default(true) @map("is_active")
+  lastDeliveryAt DateTime? @map("last_delivery_at")
+  failureCount   Int       @default(0) @map("failure_count")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  account Tenant @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("webhook_endpoints")
+}
+
+model Notification {
+  id             String    @id @default(uuid()) @db.Uuid
+  accountId      String    @map("account_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  type           String    @default("conversation_assigned")
+  conversationId String?   @map("conversation_id") @db.Uuid
+  contactId      String?   @map("contact_id") @db.Uuid
+  actorUserId    String?   @map("actor_user_id") @db.Uuid
+  title          String
+  body           String?
+  readAt         DateTime? @map("read_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  account Tenant @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, userId])
+  @@map("notifications")
+}
+
+// ─── AI ──────────────────────────────────────────────────────
+
+model AiConfig {
+  id                            String   @id @default(uuid()) @db.Uuid
+  accountId                     String   @unique @map("account_id") @db.Uuid
+  createdBy                     String?  @map("created_by") @db.Uuid
+  provider                      String
+  model                         String
+  apiKey                        String   @map("api_key")
+  embeddingsApiKey              String?  @map("embeddings_api_key")
+  systemPrompt                  String?  @map("system_prompt")
+  isActive                      Boolean  @default(false) @map("is_active")
+  autoReplyEnabled              Boolean  @default(false) @map("auto_reply_enabled")
+  autoReplyMaxPerConversation   Int      @default(3) @map("auto_reply_max_per_conversation")
+  createdAt                     DateTime @default(now()) @map("created_at")
+  updatedAt                     DateTime @updatedAt @map("updated_at")
+
+  account Tenant @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("ai_configs")
+}
+
+model AiKnowledgeDocument {
+  id        String   @id @default(uuid()) @db.Uuid
+  accountId String   @map("account_id") @db.Uuid
+  createdBy String?  @map("created_by") @db.Uuid
+  title     String
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  account Tenant             @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  chunks  AiKnowledgeChunk[]
+
+  @@index([accountId])
+  @@map("ai_knowledge_documents")
+}
+
+model AiKnowledgeChunk {
+  id         String   @id @default(uuid()) @db.Uuid
+  documentId String   @map("document_id") @db.Uuid
+  accountId  String   @map("account_id") @db.Uuid
+  chunkIndex Int      @default(0) @map("chunk_index")
+  content    String
+  // FTS (tsvector) + pgvector embedding applied via SQL migration / raw queries
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  document AiKnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  account  Tenant              @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@index([documentId])
+  @@map("ai_knowledge_chunks")
+}
+
+model AiUsageLog {
+  id               String   @id @default(uuid()) @db.Uuid
+  accountId        String   @map("account_id") @db.Uuid
+  conversationId   String?  @map("conversation_id") @db.Uuid
+  mode             String
+  provider         String
+  model            String
+  promptTokens     Int      @default(0) @map("prompt_tokens")
+  completionTokens Int      @default(0) @map("completion_tokens")
+  totalTokens      Int      @default(0) @map("total_tokens")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  account Tenant @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@map("ai_usage_log")
+}

@@ -4,13 +4,21 @@
 
 -- ============================================================
 -- 006_automations.sql — Automations feature
---
--- Idempotent migration — safe to run multiple times.
--- Follows the same conventions as 001_initial_schema.sql:
---   IF NOT EXISTS on tables/indexes, DROP IF EXISTS before
---   re-creating policies/triggers (Postgres has no
---   -- [removed] CREATE POLICY
+-- ============================================================
 
+CREATE TABLE IF NOT EXISTS automations (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT,
+  trigger_type TEXT NOT NULL,
+  trigger_config JSONB NOT NULL DEFAULT '{}'::jsonb,
+  is_active BOOLEAN NOT NULL DEFAULT FALSE,
+  execution_count INTEGER NOT NULL DEFAULT 0,
+  last_executed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 CREATE INDEX IF NOT EXISTS idx_automations_user_id ON automations(user_id);
 -- Partial index tuned for the engine's hot path: find active automations

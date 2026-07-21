@@ -259,10 +259,11 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON flows
 -- realtime — the builder reads on demand, the runner is server-side.
 DO $$
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_publication_tables
-    WHERE pubname = 'supabase_realtime' AND tablename = 'flow_runs'
-  ) THEN
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime')
+     AND NOT EXISTS (
+       SELECT 1 FROM pg_publication_tables
+       WHERE pubname = 'supabase_realtime' AND tablename = 'flow_runs'
+     ) THEN
     ALTER PUBLICATION supabase_realtime ADD TABLE flow_runs;
   END IF;
 END $$;

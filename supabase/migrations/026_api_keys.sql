@@ -37,10 +37,21 @@
 --   client (RLS-bypassing) because an API caller has no Supabase
 --   session and therefore no `NULL /* was auth.uid() — enforce in app */` for a policy to match.
 --
--- Idempotent — safe to run multiple times. Table uses IF NOT
--- EXISTS; policies are dropped before recreate (Postgres has no
--- -- [removed] CREATE POLICY
+-- Idempotent — safe to run multiple times.
 
+CREATE TABLE IF NOT EXISTS api_keys (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  account_id   uuid NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  created_by   uuid REFERENCES users(id) ON DELETE SET NULL,
+  name         text NOT NULL,
+  key_prefix   text NOT NULL,
+  key_hash     text NOT NULL UNIQUE,
+  scopes       text[] NOT NULL DEFAULT '{}',
+  last_used_at timestamptz,
+  expires_at   timestamptz,
+  revoked_at   timestamptz,
+  created_at   timestamptz NOT NULL DEFAULT now()
+);
 
 -- account_id: every "list this account's keys" query filters on it.
 CREATE INDEX IF NOT EXISTS api_keys_account_id_idx ON api_keys (account_id);

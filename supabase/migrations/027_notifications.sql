@@ -120,14 +120,15 @@ CREATE TRIGGER on_conversation_assigned
   FOR EACH ROW EXECUTE FUNCTION notify_conversation_assigned();
 
 -- ============================================================
--- ENABLE REALTIME
+-- ENABLE REALTIME (no-op on plain Postgres)
 -- ============================================================
 DO $$
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_publication_tables
-    WHERE pubname = 'supabase_realtime' AND tablename = 'notifications'
-  ) THEN
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime')
+     AND NOT EXISTS (
+       SELECT 1 FROM pg_publication_tables
+       WHERE pubname = 'supabase_realtime' AND tablename = 'notifications'
+     ) THEN
     ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
   END IF;
 END $$;

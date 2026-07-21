@@ -93,13 +93,14 @@ BEGIN
 END;
 $$;
 
--- ---- realtime ----------------------------------------------
+-- ---- realtime (no-op on plain Postgres) --------------------
 DO $$
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_publication_tables
-    WHERE pubname = 'supabase_realtime' AND tablename = 'member_presence'
-  ) THEN
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime')
+     AND NOT EXISTS (
+       SELECT 1 FROM pg_publication_tables
+       WHERE pubname = 'supabase_realtime' AND tablename = 'member_presence'
+     ) THEN
     ALTER PUBLICATION supabase_realtime ADD TABLE member_presence;
   END IF;
 END $$;

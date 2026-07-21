@@ -50,3 +50,4 @@ npm run dev
 - `tsc --noEmit` está limpo (testes `*.test.ts` excluídos do `tsconfig` temporariamente).
 - Spec: `docs/superpowers/specs/2026-07-15-prisma-waha-migration-design.md`
 - Plano: `docs/superpowers/plans/2026-07-15-prisma-waha-migration.md`
+- Deploy Dokploy: `docs/dokploy.md`

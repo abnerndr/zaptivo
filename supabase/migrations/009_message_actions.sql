@@ -79,13 +79,14 @@ CREATE INDEX IF NOT EXISTS idx_message_reactions_message
 -- [removed] CREATE POLICY
 
 
--- Realtime — let the thread subscribe filtered by conversation_id.
+-- Realtime — no-op on plain Postgres (publication só no Supabase).
 DO $$
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_publication_tables
-    WHERE pubname = 'supabase_realtime' AND tablename = 'message_reactions'
-  ) THEN
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime')
+     AND NOT EXISTS (
+       SELECT 1 FROM pg_publication_tables
+       WHERE pubname = 'supabase_realtime' AND tablename = 'message_reactions'
+     ) THEN
     ALTER PUBLICATION supabase_realtime ADD TABLE message_reactions;
   END IF;
 END $$;

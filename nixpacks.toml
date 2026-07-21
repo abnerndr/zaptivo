@@ -1,0 +1,31 @@
+# Nixpacks config for Dokploy (Next.js 16 + Prisma 7 + PostgreSQL)
+# Build type in Dokploy: Nixpacks
+# Port: 3000
+
+providers = ["node"]
+
+[variables]
+NODE_ENV = "production"
+NEXT_TELEMETRY_DISABLED = "1"
+# Keep install complete so TypeScript / Prisma CLI exist during build
+NPM_CONFIG_PRODUCTION = "false"
+NIXPACKS_NODE_VERSION = "20"
+
+[phases.setup]
+# openssl helps Prisma engines; nodejs comes from the node provider
+nixPkgs = ["openssl"]
+
+[phases.install]
+cmds = [
+  "npm ci --include=dev",
+]
+
+[phases.build]
+# prisma.config.ts exige DATABASE_URL; no build basta um placeholder se o Dokploy ainda não injetou
+cmds = [
+  "DATABASE_URL=\"${DATABASE_URL:-postgresql://build:build@127.0.0.1:5432/build?schema=public}\" npx prisma generate && npm run build",
+]
+
+# Migrate against DATABASE_URL, then bind on all interfaces for Traefik
+[start]
+cmd = "npm run start:dokploy"

@@ -341,29 +341,53 @@ CREATE INDEX IF NOT EXISTS idx_broadcast_recipients_broadcast ON broadcast_recip
 -- ============================================================
 -- UPDATED_AT TRIGGER FUNCTION
 -- ============================================================
--- [removed] handle_new_user function
--- [removed] ALTER FUNCTION OWNER
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
--- [removed] auth signup trigger
+DROP TRIGGER IF EXISTS set_updated_at ON profiles;
+DROP TRIGGER IF EXISTS set_updated_at ON contacts;
+DROP TRIGGER IF EXISTS set_updated_at ON conversations;
+DROP TRIGGER IF EXISTS set_updated_at ON whatsapp_config;
+DROP TRIGGER IF EXISTS set_updated_at ON message_templates;
+DROP TRIGGER IF EXISTS set_updated_at ON deals;
+DROP TRIGGER IF EXISTS set_updated_at ON broadcasts;
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON profiles FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON contacts FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON conversations FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON whatsapp_config FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON message_templates FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON deals FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON broadcasts FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- [removed] handle_new_user / auth.users signup trigger (Auth.js cuida no app)
 
 
 -- ============================================================
--- ENABLE REALTIME for key tables (idempotent via DO block)
+-- ENABLE REALTIME for key tables (no-op on plain Postgres)
 -- ============================================================
 DO $$
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_publication_tables
-    WHERE pubname = 'supabase_realtime' AND tablename = 'messages'
-  ) THEN
-    ALTER PUBLICATION supabase_realtime ADD TABLE messages;
-  END IF;
+  -- supabase_realtime só existe em projetos Supabase; Postgres puro pula.
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_publication_tables
+      WHERE pubname = 'supabase_realtime' AND tablename = 'messages'
+    ) THEN
+      ALTER PUBLICATION supabase_realtime ADD TABLE messages;
+    END IF;
 
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_publication_tables
-    WHERE pubname = 'supabase_realtime' AND tablename = 'conversations'
-  ) THEN
-    ALTER PUBLICATION supabase_realtime ADD TABLE conversations;
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_publication_tables
+      WHERE pubname = 'supabase_realtime' AND tablename = 'conversations'
+    ) THEN
+      ALTER PUBLICATION supabase_realtime ADD TABLE conversations;
+    END IF;
   END IF;
 END $$;
 

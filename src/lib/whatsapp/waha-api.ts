@@ -360,6 +360,67 @@ export async function ensureSession(session: string): Promise<WahaSessionInfo> {
   }
 }
 
+/**
+ * Lightweight: start the session if STOPPED/FAILED and wait until WORKING.
+ * Skips webhook rewrite when already healthy (used by background sync).
+ */
+export async function ensureSessionWorking(
+  session: string,
+  opts?: { waitMs?: number; updateWebhooks?: boolean },
+): Promise<WahaSessionInfo> {
+  const waitMs = opts?.waitMs ?? 20_000
+  const updateHooks = opts?.updateWebhooks ?? false
+
+  let live: WahaSessionInfo
+  try {
+    live = await getSession(session)
+  } catch (err) {
+    const status = (err as { status?: number }).status
+    if (status === 404) {
+      live = await createSession(session)
+    } else {
+      throw err
+    }
+  }
+
+  if (live.status === 'WORKING') {
+    if (updateHooks) await updateSessionWebhooks(session).catch(() => {})
+    return live
+  }
+
+  if (
+    live.status === 'STOPPED' ||
+    live.status === 'FAILED' ||
+    live.status === 'STARTING'
+  ) {
+    if (live.status !== 'STARTING') {
+      const started = await startSession(session)
+      if (!started.ok && started.status !== 422) {
+        console.warn(
+          '[waha] ensureSessionWorking start',
+          started.status,
+          await started.text().catch(() => ''),
+        )
+      }
+    }
+
+    const deadline = Date.now() + waitMs
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 1500))
+      live = await getSession(session)
+      if (live.status === 'WORKING') break
+      if (live.status === 'SCAN_QR_CODE') break
+      if (live.status === 'FAILED') break
+    }
+  }
+
+  if (live.status === 'WORKING' && updateHooks) {
+    await updateSessionWebhooks(session).catch(() => {})
+  }
+
+  return live
+}
+
 export class WahaQrError extends Error {
   constructor(
     message: string,

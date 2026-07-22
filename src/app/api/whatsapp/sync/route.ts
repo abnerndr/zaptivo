@@ -1,10 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireSessionAccount } from '@/lib/auth/context'
 import { prisma } from '@/lib/db/prisma'
-import {
-  ensureSession,
-  updateSessionWebhooks,
-} from '@/lib/whatsapp/waha-api'
+import { ensureSessionWorking } from '@/lib/whatsapp/waha-api'
 import {
   syncWahaChatForPhone,
   syncWahaChats,
@@ -18,7 +15,7 @@ import {
  * Pull recent chats/messages from WAHA into the CRM inbox.
  *
  * Query:
- * - `?light=1` — skip ensureSession + LID backfill (fast background poll)
+ * - `?light=1` — faster poll (still starts session if STOPPED)
  * - `?conversationId=` — sync only that contact's chat into that thread
  */
 export async function POST(req: Request) {
@@ -38,11 +35,41 @@ export async function POST(req: Request) {
       )
     }
 
-    if (light) {
-      // Keep WAHA webhook pointed at a public URL (WAHA_WEBHOOK_URL / prod)
-      void updateSessionWebhooks(config.wahaSession).catch(() => {})
-    } else {
-      await ensureSession(config.wahaSession).catch(() => null)
+    const session = await ensureSessionWorking(config.wahaSession, {
+      waitMs: light ? 12_000 : 25_000,
+      updateWebhooks: !light,
+    }).catch((err) => {
+      console.warn('[whatsapp/sync] ensureSessionWorking', err)
+      return null
+    })
+
+    if (session) {
+      await prisma.whatsappConfig
+        .update({
+          where: { id: config.id },
+          data: {
+            status: session.status,
+            connectedAt:
+              session.status === 'WORKING' ? new Date() : config.connectedAt,
+          },
+        })
+        .catch(() => {})
+    }
+
+    if (!session || session.status !== 'WORKING') {
+      const status = session?.status ?? 'UNKNOWN'
+      const payload = {
+        ok: false,
+        skipped: 'session_not_working',
+        status,
+        error:
+          status === 'SCAN_QR_CODE'
+            ? 'WhatsApp desconectado — escaneie o QR em Configurações'
+            : `Sessão WhatsApp ${status}. Tentando reconectar…`,
+      }
+      // Background light polls should not spam 502
+      if (light) return NextResponse.json(payload)
+      return NextResponse.json(payload, { status: 503 })
     }
 
     if (conversationId) {
@@ -87,7 +114,6 @@ export async function POST(req: Request) {
         : {}),
     })
 
-    // Full account cleanup after broad sync (all contacts)
     const dedupe = light
       ? null
       : await dedupeAccountInbox(ctx.accountId).catch(() => null)
@@ -97,6 +123,11 @@ export async function POST(req: Request) {
     if (err instanceof Response) return err
     const message = err instanceof Error ? err.message : 'Sync failed'
     console.error('[whatsapp/sync]', err)
+    // Soft-fail background polls when WAHA is temporarily down
+    const url = new URL(req.url)
+    if (url.searchParams.get('light') === '1') {
+      return NextResponse.json({ ok: false, error: message, skipped: 'waha_error' })
+    }
     return NextResponse.json({ error: message }, { status: 502 })
   }
 }

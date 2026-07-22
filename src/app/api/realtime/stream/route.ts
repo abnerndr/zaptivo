@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/db/prisma'
 import { accountNotifyChannel } from '@/lib/db/notify'
-import { Pool } from 'pg'
+import { Client } from 'pg'
 
 export async function GET(req: Request) {
   const session = await auth()
@@ -25,43 +25,60 @@ export async function GET(req: Request) {
     return new Response('Forbidden', { status: 403 })
   }
 
+  const connectionString = process.env.DATABASE_URL
+  if (!connectionString) {
+    return new Response('DATABASE_URL missing', { status: 500 })
+  }
+
   const channel = accountNotifyChannel(accountId)
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL })
-  const client = await pool.connect()
-  // Channel names are sanitized in accountNotifyChannel (uuid → underscores)
-  await client.query(`LISTEN "${channel}"`)
+  // Dedicated client — LISTEN must hold the connection open
+  const client = new Client({ connectionString })
+  await client.connect()
+  // Unquoted channel name (pg_notify uses the same)
+  await client.query(`LISTEN ${channel}`)
 
   const stream = new ReadableStream({
     start(controller) {
       const enc = new TextEncoder()
+      let closed = false
       const send = (data: string) => {
+        if (closed) return
         try {
           controller.enqueue(enc.encode(`data: ${data}\n\n`))
         } catch {
-          // stream closed
+          closed = true
         }
       }
       send(JSON.stringify({ type: 'ready' }))
 
       const onNotify = (msg: { channel: string; payload?: string }) => {
-        if (msg.channel === channel && msg.payload) send(msg.payload)
+        if (msg.channel === channel && msg.payload) {
+          send(msg.payload)
+        }
       }
       client.on('notification', onNotify)
 
-      const ping = setInterval(() => send(JSON.stringify({ type: 'ping' })), 15000)
+      const ping = setInterval(
+        () => send(JSON.stringify({ type: 'ping' })),
+        15000,
+      )
 
       const cleanup = () => {
+        if (closed) return
+        closed = true
         clearInterval(ping)
         client.removeListener('notification', onNotify)
-        void client.query('UNLISTEN *').finally(() => {
-          client.release()
-          void pool.end()
-          try {
-            controller.close()
-          } catch {
-            /* already closed */
-          }
-        })
+        void client
+          .query('UNLISTEN *')
+          .catch(() => {})
+          .finally(() => {
+            void client.end().catch(() => {})
+            try {
+              controller.close()
+            } catch {
+              /* already closed */
+            }
+          })
       }
 
       req.signal.addEventListener('abort', cleanup)
@@ -73,6 +90,7 @@ export async function GET(req: Request) {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
       Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
     },
   })
 }

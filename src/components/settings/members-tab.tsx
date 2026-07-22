@@ -154,8 +154,8 @@ export function MembersTab() {
         toast.error(payload.error || 'Failed to load members');
         return;
       }
-      const mdata = (await mres.json()) as { members: Member[] };
-      setMembers(mdata.members);
+      const mdata = (await mres.json()) as { members?: Member[] };
+      setMembers(mdata.members ?? []);
 
       if (ires) {
         if (!ires.ok) {
@@ -163,8 +163,8 @@ export function MembersTab() {
           toast.error(payload.error || 'Failed to load invitations');
           return;
         }
-        const idata = (await ires.json()) as { invitations: Invitation[] };
-        setInvitations(idata.invitations);
+        const idata = (await ires.json()) as { invitations?: Invitation[] };
+        setInvitations(idata.invitations ?? []);
       } else {
         setInvitations([]);
       }

@@ -1,28 +1,88 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db/prisma";
-import { requireSessionAccount } from "@/lib/auth/context";
+import { NextResponse } from 'next/server'
+import {
+  getCurrentAccount,
+  removeAccountMember,
+  requireRole,
+  setMemberRole,
+  toErrorResponse,
+} from '@/lib/auth/account'
+import type { AccountRole } from '@/lib/auth/roles'
+import { ACCOUNT_ROLES } from '@/lib/auth/roles'
+import { prisma } from '@/lib/db/prisma'
 
-/**
- * Migrated stub — src/app/api/account/members/[userId]/route.ts
- * Full behaviour may need follow-up; auth + account scoping via Prisma.
- */
-export async function GET() {
+type Ctx = { params: Promise<{ userId: string }> }
+
+export async function PATCH(req: Request, ctx: Ctx) {
   try {
-    const ctx = await requireSessionAccount();
-    return NextResponse.json({ ok: true, accountId: ctx.accountId, notice: "endpoint migrated to Prisma shell — expand as needed" });
+    const { userId } = await ctx.params
+    const account = await requireRole('admin')
+    const body = (await req.json().catch(() => ({}))) as { role?: string }
+    const role = body.role as AccountRole | undefined
+
+    if (!role || !ACCOUNT_ROLES.includes(role) || role === 'owner') {
+      return NextResponse.json(
+        { error: 'Invalid role (owner cannot be assigned here)' },
+        { status: 400 },
+      )
+    }
+
+    if (userId === account.userId) {
+      return NextResponse.json(
+        { error: 'Cannot change your own role' },
+        { status: 400 },
+      )
+    }
+
+    const target = await prisma.profile.findFirst({
+      where: { accountId: account.accountId, userId },
+    })
+    if (!target) {
+      return NextResponse.json({ error: 'Member not found' }, { status: 404 })
+    }
+    if (target.accountRole === 'owner') {
+      return NextResponse.json(
+        { error: 'Cannot change the owner role here' },
+        { status: 400 },
+      )
+    }
+
+    await setMemberRole(account.accountId, userId, role)
+    return NextResponse.json({ ok: true })
   } catch (err) {
-    if (err instanceof Response) return err;
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    return toErrorResponse(err)
   }
 }
 
-export async function POST(req: Request) {
+export async function DELETE(_req: Request, ctx: Ctx) {
   try {
-    const ctx = await requireSessionAccount();
-    const body = await req.json().catch(() => ({}));
-    return NextResponse.json({ ok: true, accountId: ctx.accountId, received: body });
+    const { userId } = await ctx.params
+    const account = await requireRole('admin')
+
+    if (userId === account.userId) {
+      return NextResponse.json(
+        { error: 'Cannot remove yourself' },
+        { status: 400 },
+      )
+    }
+
+    const target = await prisma.profile.findFirst({
+      where: { accountId: account.accountId, userId },
+    })
+    if (!target) {
+      return NextResponse.json({ error: 'Member not found' }, { status: 404 })
+    }
+    if (target.accountRole === 'owner') {
+      return NextResponse.json(
+        { error: 'Cannot remove the account owner' },
+        { status: 400 },
+      )
+    }
+
+    await removeAccountMember(account.accountId, userId)
+    // Ensure caller still has a valid session context
+    await getCurrentAccount()
+    return NextResponse.json({ ok: true })
   } catch (err) {
-    if (err instanceof Response) return err;
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    return toErrorResponse(err)
   }
 }

@@ -18,8 +18,15 @@ export async function PATCH(req: Request, ctx: Ctx) {
     const updated = await prisma.contact.update({
       where: { id },
       data: {
-        ...(typeof body.name === 'string' ? { name: body.name } : {}),
-        ...(typeof body.phone === 'string' ? { phone: body.phone } : {}),
+        ...(typeof body.name === 'string'
+          ? { name: body.name.trim() || null }
+          : {}),
+        ...(typeof body.phone === 'string'
+          ? {
+              phone: body.phone.trim(),
+              phoneNormalized: body.phone.replace(/\D/g, '') || null,
+            }
+          : {}),
         ...(typeof body.email === 'string' || body.email === null
           ? { email: body.email as string | null }
           : {}),
@@ -28,7 +35,14 @@ export async function PATCH(req: Request, ctx: Ctx) {
           : {}),
       },
     })
-    return NextResponse.json(updated)
+    return NextResponse.json({
+      id: updated.id,
+      name: updated.name,
+      phone: updated.phone,
+      email: updated.email,
+      company: updated.company,
+      avatar_url: updated.avatarUrl,
+    })
   } catch (err) {
     if (err instanceof Response) return err
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })

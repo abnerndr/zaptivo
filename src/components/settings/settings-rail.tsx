@@ -11,6 +11,21 @@ import {
   type SettingsSection,
 } from './settings-sections';
 
+/** Map URL/section ids (kebab) → message keys (camelCase where needed). */
+const SECTION_MESSAGE_KEY: Record<SettingsSection, string> = {
+  overview: 'overview',
+  profile: 'profile',
+  security: 'security',
+  appearance: 'appearance',
+  whatsapp: 'whatsapp',
+  templates: 'templates',
+  'quick-replies': 'quickReplies',
+  fields: 'fields',
+  deals: 'deals',
+  members: 'members',
+  api: 'api',
+};
+
 // Width at/above which the rail is a vertical column (already in view, so
 // no auto-scroll needed). Mirrors the Tailwind `lg:` breakpoint that
 // drives the row→column switch in the markup below — keep the two in sync.
@@ -73,6 +88,8 @@ export function SettingsRail({
               const meta = SECTION_META[s];
               const Icon = meta.icon;
               const isActive = s === active;
+              const msgKey = `sections.${SECTION_MESSAGE_KEY[s]}` as const;
+              const label = t.has(msgKey) ? t(msgKey) : meta.label;
               return (
                 <button
                   key={s}
@@ -89,7 +106,7 @@ export function SettingsRail({
                   )}
                 >
                   <Icon className="size-4 shrink-0" />
-                  <span className="flex-1">{t(`sections.${s}`)}</span>
+                  <span className="flex-1">{label}</span>
                   {hints?.[s] != null ? (
                     <span
                       className={cn(

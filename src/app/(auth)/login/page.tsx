@@ -48,7 +48,7 @@ function LoginPageInner() {
     });
 
     if (result?.error) {
-      setError("CPF ou senha inválidos");
+      setError(t("invalidCredentials"));
       setLoading(false);
       return;
     }
@@ -89,13 +89,13 @@ function LoginPageInner() {
 
             <div className="flex flex-col gap-2">
               <Label htmlFor="cpf" className="text-muted-foreground">
-                CPF
+                {t("cpfLabel")}
               </Label>
               <Input
                 id="cpf"
                 type="text"
                 inputMode="numeric"
-                placeholder="000.000.000-00"
+                placeholder={t("cpfPlaceholder")}
                 value={cpf}
                 onChange={(e) => setCpf(e.target.value)}
                 required

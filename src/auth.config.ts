@@ -1,6 +1,9 @@
 import type { NextAuthConfig } from 'next-auth'
 
 export const authConfig = {
+  // Dokploy/Traefik: Host vem do proxy (ou 0.0.0.0 no container).
+  // Sem isto → UntrustedHost → /api/auth/error "server configuration".
+  trustHost: true,
   pages: {
     signIn: '/login',
   },

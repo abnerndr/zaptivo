@@ -1,33 +1,26 @@
-import { NextResponse } from "next/server"
-import { getCurrentAccount, requireRole, toErrorResponse } from "@/lib/auth/account"
-import { prisma } from "@/lib/db/prisma"
+import { NextResponse } from 'next/server'
+import { requireRole, toErrorResponse } from '@/lib/auth/account'
+import { prisma } from '@/lib/db/prisma'
 
-export async function GET() {
+type Ctx = { params: Promise<{ id: string }> }
+
+export async function DELETE(_req: Request, ctx: Ctx) {
   try {
-    const ctx = await getCurrentAccount()
-    return NextResponse.json({ ok: true, accountId: ctx.accountId })
-  } catch (err) {
-    return toErrorResponse(err)
-  }
-}
+    const { id } = await ctx.params
+    const account = await requireRole('admin')
 
-export async function POST(request: Request) {
-  try {
-    const ctx = await requireRole("admin")
-    const body = await request.json().catch(() => ({}))
-    return NextResponse.json({ ok: true, accountId: ctx.accountId, body })
-  } catch (err) {
-    return toErrorResponse(err)
-  }
-}
+    const deleted = await prisma.accountInvitation.deleteMany({
+      where: {
+        id,
+        accountId: account.accountId,
+        acceptedAt: null,
+      },
+    })
 
-export async function PATCH(request: Request) {
-  return POST(request)
-}
+    if (deleted.count === 0) {
+      return NextResponse.json({ error: 'Invitation not found' }, { status: 404 })
+    }
 
-export async function DELETE() {
-  try {
-    await requireRole("admin")
     return NextResponse.json({ ok: true })
   } catch (err) {
     return toErrorResponse(err)

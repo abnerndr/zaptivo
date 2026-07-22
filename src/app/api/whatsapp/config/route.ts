@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
 import { requireSessionAccount } from '@/lib/auth/context'
-import { startSession, stopSession, getSession } from '@/lib/whatsapp/waha-api'
+import { ensureSession, stopSession, getSession } from '@/lib/whatsapp/waha-api'
 
 export async function GET() {
   try {
@@ -13,9 +13,26 @@ export async function GET() {
       return NextResponse.json({ configured: false })
     }
     let liveStatus = config.status
+    let me: { id?: string; pushName?: string } | null = null
     try {
-      const live = (await getSession(config.wahaSession)) as { status?: string }
-      if (live?.status) liveStatus = live.status
+      const live = await getSession(config.wahaSession)
+      if (live?.status) {
+        liveStatus = live.status
+        me = live.me ?? null
+        if (live.status !== config.status) {
+          await prisma.whatsappConfig.update({
+            where: { id: config.id },
+            data: {
+              status: live.status,
+              displayName: live.me?.pushName ?? config.displayName,
+              connectedAt:
+                live.status === 'WORKING'
+                  ? (config.connectedAt ?? new Date())
+                  : config.connectedAt,
+            },
+          })
+        }
+      }
     } catch {
       /* WAHA unreachable — return stored status */
     }
@@ -24,7 +41,8 @@ export async function GET() {
       id: config.id,
       waha_session: config.wahaSession,
       status: liveStatus,
-      display_name: config.displayName,
+      display_name: config.displayName ?? me?.pushName ?? null,
+      me,
       connected_at: config.connectedAt,
       webhook_url: `${process.env.NEXT_PUBLIC_SITE_URL ?? ''}/api/whatsapp/webhook`,
     })
@@ -58,13 +76,17 @@ export async function POST(req: Request) {
     })
 
     try {
-      await startSession(sessionName)
+      const live = await ensureSession(sessionName)
       await prisma.whatsappConfig.update({
         where: { id: config.id },
-        data: { status: 'STARTING' },
+        data: {
+          status: live.status || 'STARTING',
+          displayName: live.me?.pushName ?? config.displayName,
+          connectedAt: live.status === 'WORKING' ? new Date() : null,
+        },
       })
     } catch (err) {
-      console.warn('[whatsapp/config] startSession:', err)
+      console.warn('[whatsapp/config] ensureSession:', err)
     }
 
     return NextResponse.json({ ok: true, id: config.id })

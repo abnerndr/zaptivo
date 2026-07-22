@@ -5,7 +5,14 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, QrCode, Power, PowerOff, Copy } from "lucide-react";
+import {
+  Loader2,
+  QrCode,
+  Power,
+  PowerOff,
+  Copy,
+  LogOut,
+} from "lucide-react";
 
 type ConfigState = {
   configured: boolean;
@@ -13,6 +20,7 @@ type ConfigState = {
   status?: string;
   display_name?: string | null;
   webhook_url?: string;
+  me?: { id?: string; pushName?: string } | null;
 };
 
 export function WhatsAppConfig() {
@@ -28,6 +36,7 @@ export function WhatsAppConfig() {
     const data = (await res.json()) as ConfigState;
     setConfig(data);
     if (data.waha_session) setSessionName(data.waha_session);
+    if (data.status === "WORKING") setQrUrl(null);
   }, []);
 
   useEffect(() => {
@@ -36,12 +45,31 @@ export function WhatsAppConfig() {
 
   const loadQr = async () => {
     const res = await fetch("/api/whatsapp/session");
+    const ct = res.headers.get("content-type") ?? "";
+
     if (!res.ok) {
-      toast.error("Não foi possível obter o QR");
+      let message = "Não foi possível obter o QR";
+      if (ct.includes("application/json")) {
+        const data = (await res.json()) as { error?: string; status?: string };
+        message = data.error ?? message;
+        if (data.status) await refresh();
+      }
+      toast.error(message);
       return;
     }
+
+    if (!ct.includes("image")) {
+      toast.error("Resposta inesperada ao buscar QR");
+      return;
+    }
+
     const blob = await res.blob();
-    setQrUrl(URL.createObjectURL(blob));
+    setQrUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(blob);
+    });
+    toast.success("QR atualizado — escaneie no WhatsApp");
+    await refresh();
   };
 
   const save = async () => {
@@ -59,23 +87,38 @@ export function WhatsAppConfig() {
       }
       toast.success("Sessão WAHA salva");
       await refresh();
-      await loadQr();
+      // Só pede QR se ainda não estiver autenticada
+      const after = await fetch("/api/whatsapp/config");
+      const cfg = (await after.json()) as ConfigState;
+      if (cfg.status === "WORKING") {
+        toast.message("Sessão já está WORKING — sem QR necessário");
+        setQrUrl(null);
+      } else {
+        await loadQr();
+      }
     } finally {
       setSaving(false);
     }
   };
 
-  const startStop = async (action: "start" | "stop") => {
+  const startStop = async (action: "start" | "stop" | "logout") => {
     const res = await fetch("/api/whatsapp/session", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action }),
     });
     if (!res.ok) {
-      toast.error("Falha na ação da sessão");
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      toast.error(data.error ?? "Falha na ação da sessão");
       return;
     }
-    toast.success(action === "start" ? "Sessão iniciando…" : "Sessão parada");
+    const labels = {
+      start: "Sessão iniciando…",
+      stop: "Sessão parada",
+      logout: "Logout feito — inicie de novo para gerar QR",
+    } as const;
+    toast.success(labels[action]);
+    setQrUrl(null);
     await refresh();
     if (action === "start") await loadQr();
   };
@@ -94,6 +137,8 @@ export function WhatsAppConfig() {
       </div>
     );
   }
+
+  const isWorking = config.status === "WORKING";
 
   return (
     <div className="max-w-xl space-y-6">
@@ -116,10 +161,22 @@ export function WhatsAppConfig() {
       </div>
 
       {config.configured && (
-        <p className="text-sm">
-          Status:{" "}
-          <span className="font-medium">{config.status ?? "—"}</span>
-        </p>
+        <div className="space-y-1 text-sm">
+          <p>
+            Status:{" "}
+            <span className="font-medium">{config.status ?? "—"}</span>
+          </p>
+          {isWorking && (
+            <p className="text-emerald-600 dark:text-emerald-400">
+              Conectado
+              {config.me?.pushName || config.display_name
+                ? ` como ${config.me?.pushName ?? config.display_name}`
+                : ""}
+              {config.me?.id ? ` (${config.me.id})` : ""}. QR só aparece em
+              SCAN_QR_CODE — use Logout para forçar novo pareamento.
+            </p>
+          )}
+        </div>
       )}
 
       {config.webhook_url && (
@@ -153,8 +210,15 @@ export function WhatsAppConfig() {
         <Button variant="outline" onClick={() => void startStop("stop")}>
           <PowerOff className="mr-1 h-4 w-4" /> Stop
         </Button>
-        <Button variant="outline" onClick={() => void loadQr()}>
+        <Button
+          variant="outline"
+          onClick={() => void loadQr()}
+          disabled={isWorking}
+        >
           <QrCode className="mr-1 h-4 w-4" /> QR
+        </Button>
+        <Button variant="outline" onClick={() => void startStop("logout")}>
+          <LogOut className="mr-1 h-4 w-4" /> Logout
         </Button>
         {config.configured && (
           <Button variant="destructive" onClick={() => void disconnect()}>

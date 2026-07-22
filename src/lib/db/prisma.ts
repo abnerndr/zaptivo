@@ -7,18 +7,19 @@ const globalForPrisma = globalThis as unknown as {
   pgPool?: Pool
 }
 
-function createClient(): PrismaClient {
+export function getPgPool(): Pool {
   const connectionString = process.env.DATABASE_URL
   if (!connectionString) {
     throw new Error('DATABASE_URL is not set')
   }
-  const pool =
-    globalForPrisma.pgPool ??
-    new Pool({
-      connectionString,
-    })
-  globalForPrisma.pgPool = pool
-  const adapter = new PrismaPg(pool)
+  if (!globalForPrisma.pgPool) {
+    globalForPrisma.pgPool = new Pool({ connectionString })
+  }
+  return globalForPrisma.pgPool
+}
+
+function createClient(): PrismaClient {
+  const adapter = new PrismaPg(getPgPool())
   return new PrismaClient({ adapter })
 }
 

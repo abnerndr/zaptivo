@@ -19,6 +19,8 @@ O build/start usam:
 |---|---|
 | `DATABASE_URL` | URL do Postgres do Dokploy (`?schema=public`) |
 | `AUTH_SECRET` | `openssl rand -base64 32` |
+| `AUTH_URL` | Mesma URL pública HTTPS (ex. `https://wacrm.ruperth.com`) |
+| `AUTH_TRUST_HOST` | `true` (obrigatório atrás do Traefik/Dokploy) |
 | `ENCRYPTION_KEY` | 32 bytes hex/base64 conforme o app |
 | `NEXT_PUBLIC_SITE_URL` | URL pública HTTPS do app |
 | `NEXT_PUBLIC_APP_LOCALE` | ex. `pt-BR` |

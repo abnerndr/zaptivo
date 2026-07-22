@@ -86,15 +86,16 @@ export function ApiKeysSettings() {
         toast.error(payload.error || t('loadFailed'));
         return;
       }
-      const data = (await res.json()) as { keys: ApiKey[] };
-      setKeys(data.keys);
+      const data = (await res.json()) as { keys?: ApiKey[] };
+      setKeys(data.keys ?? []);
     } catch (err) {
       console.error('[ApiKeysSettings] load error:', err);
       toast.error(t('networkError'));
+      setKeys([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();

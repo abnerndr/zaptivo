@@ -9,14 +9,20 @@ import {
   interactivePayloadPreviewText,
   type InteractiveMessagePayload,
 } from '@/lib/whatsapp/interactive'
+import { prisma } from '@/lib/db/prisma'
+import { notifyAccount } from '@/lib/db/notify'
 import {
   sanitizePhoneForMeta,
   isValidE164,
   phoneVariants,
   isRecipientNotAllowedError,
 } from '@/lib/whatsapp/phone-utils'
-import { prisma } from '@/lib/db/prisma'
-import { notifyAccount } from '@/lib/db/notify'
+import { normalizeWahaMessageId } from '@/lib/whatsapp/message-id'
+import { isLikelyLid, isLikelyPhoneNumber } from '@/lib/whatsapp/format-phone'
+import {
+  resolveToPhoneNumber,
+  upgradeContactToPhone,
+} from '@/lib/whatsapp/resolve-lid'
 
 export const MEDIA_KINDS = ['image', 'video', 'document', 'audio'] as const
 export const VALID_MESSAGE_TYPES = [
@@ -54,6 +60,10 @@ export interface SendMessageParams {
 export interface SendMessageResult {
   messageId: string
   whatsappMessageId: string
+  conversationId: string
+  contentText: string | null
+  contentType: string
+  createdAt: string
 }
 
 function renderTemplateBody(body: string, params: string[]): string {
@@ -194,11 +204,6 @@ export async function sendMessageToConversation(
     )
   }
 
-  const sanitizedPhone = sanitizePhoneForMeta(contact.phone)
-  if (!isValidE164(sanitizedPhone)) {
-    throw new SendMessageError('bad_request', 'Invalid phone number format', 400)
-  }
-
   const config = await prisma.whatsappConfig.findUnique({
     where: { accountId },
   })
@@ -217,6 +222,35 @@ export async function sendMessageToConversation(
       `WhatsApp session is ${config.status}. Scan QR and wait until WORKING.`,
       400
     )
+  }
+
+  // Contact may still hold a WhatsApp LID (not a phone). Resolve before send.
+  let sanitizedPhone = sanitizePhoneForMeta(contact.phone)
+  let contactId = contact.id
+  if (isLikelyLid(sanitizedPhone) || !isLikelyPhoneNumber(sanitizedPhone)) {
+    const resolved = await resolveToPhoneNumber({
+      session: config.wahaSession,
+      phoneOrLid: contact.phone,
+    })
+    if (!resolved.resolved || !isLikelyPhoneNumber(resolved.phone)) {
+      throw new SendMessageError(
+        'bad_request',
+        'Não foi possível obter o telefone deste contato (só temos o ID interno do WhatsApp). Clique em Sincronizar na Inbox e tente de novo.',
+        400,
+      )
+    }
+    sanitizedPhone = resolved.phone
+    const upgraded = await upgradeContactToPhone({
+      accountId,
+      contactId: contact.id,
+      phone: sanitizedPhone,
+      name: resolved.pushName || contact.name,
+    })
+    contactId = upgraded.contactId
+  }
+
+  if (!isValidE164(sanitizedPhone) || isLikelyLid(sanitizedPhone)) {
+    throw new SendMessageError('bad_request', 'Invalid phone number format', 400)
   }
 
   let textToSend = contentText ?? ''
@@ -301,8 +335,8 @@ export async function sendMessageToConversation(
 
   if (workingPhone !== sanitizedPhone) {
     await prisma.contact.update({
-      where: { id: contact.id },
-      data: { phone: workingPhone },
+      where: { id: contactId },
+      data: { phone: workingPhone, phoneNormalized: workingPhone },
     })
   }
 
@@ -319,7 +353,7 @@ export async function sendMessageToConversation(
       templateName: templateName || null,
       interactivePayload:
         messageType === 'interactive' ? (interactivePayload as object) : undefined,
-      messageId: waMessageId,
+      messageId: normalizeWahaMessageId(waMessageId) ?? waMessageId,
       status: 'sent',
       replyToMessageId: replyToMessageId || null,
     },
@@ -366,6 +400,19 @@ export async function sendMessageToConversation(
     id: messageRecord.id,
     accountId,
   }).catch(() => {})
+  await notifyAccount({
+    table: 'conversations',
+    op: 'UPDATE',
+    id: conversationId,
+    accountId,
+  }).catch(() => {})
 
-  return { messageId: messageRecord.id, whatsappMessageId: waMessageId }
+  return {
+    messageId: messageRecord.id,
+    whatsappMessageId: waMessageId,
+    conversationId,
+    contentText: messageRecord.contentText,
+    contentType: messageRecord.contentType,
+    createdAt: messageRecord.createdAt.toISOString(),
+  }
 }

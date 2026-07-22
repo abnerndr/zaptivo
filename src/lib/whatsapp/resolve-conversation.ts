@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db/prisma'
 import { sanitizePhoneForMeta, phonesMatch } from '@/lib/whatsapp/phone-utils'
+import { isLikelyLid } from '@/lib/whatsapp/format-phone'
 
 /**
  * Find or create a conversation for an outbound/inbound phone number.
@@ -14,7 +15,7 @@ export async function resolveConversation(args: {
 }): Promise<{ conversationId: string; contactId: string; created: boolean }> {
   const phone = sanitizePhoneForMeta(args.phone)
 
-  const contactId = await findOrCreateContact({
+  let contactId = await findOrCreateContact({
     accountId: args.accountId,
     phone,
     contactName: args.contactName,
@@ -25,22 +26,52 @@ export async function resolveConversation(args: {
       where: {
         id: args.preferConversationId,
         accountId: args.accountId,
-        contactId,
       },
+      include: { contact: { select: { id: true, phone: true, name: true } } },
     })
     if (preferred) {
-      if (preferred.status === 'closed') {
-        await prisma.conversation.update({
-          where: { id: preferred.id },
-          data: { status: 'open' },
-        })
+      // Open thread may belong to the resolved phone contact while inbound
+      // still arrived as LID — fold into the preferred contact/thread.
+      if (preferred.contactId !== contactId) {
+        const prefPhone = preferred.contact.phone
+        const samePerson =
+          phonesMatch(prefPhone, phone) ||
+          isLikelyLid(phone) ||
+          (!!args.contactName &&
+            !!preferred.contact.name &&
+            preferred.contact.name.trim().toLowerCase() ===
+              args.contactName.trim().toLowerCase())
+        if (samePerson) {
+          await prisma.conversation.updateMany({
+            where: { contactId, accountId: args.accountId },
+            data: { contactId: preferred.contactId },
+          })
+          const left = await prisma.conversation.count({
+            where: { contactId },
+          })
+          if (left === 0) {
+            await prisma.contact
+              .delete({ where: { id: contactId } })
+              .catch(() => {})
+          }
+          contactId = preferred.contactId
+        }
       }
-      await mergeOpenConversationsForContact({
-        accountId: args.accountId,
-        contactId,
-        keepId: preferred.id,
-      })
-      return { conversationId: preferred.id, contactId, created: false }
+
+      if (preferred.contactId === contactId) {
+        if (preferred.status === 'closed') {
+          await prisma.conversation.update({
+            where: { id: preferred.id },
+            data: { status: 'open' },
+          })
+        }
+        await mergeOpenConversationsForContact({
+          accountId: args.accountId,
+          contactId,
+          keepId: preferred.id,
+        })
+        return { conversationId: preferred.id, contactId, created: false }
+      }
     }
   }
 

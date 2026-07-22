@@ -1,10 +1,16 @@
 import { prisma } from '@/lib/db/prisma'
 import { notifyAccount } from '@/lib/db/notify'
-import { resolveConversation } from '@/lib/whatsapp/resolve-conversation'
+import {
+  mergeOpenConversationsForContact,
+  resolveConversation,
+} from '@/lib/whatsapp/resolve-conversation'
 import { sanitizePhoneForMeta } from '@/lib/whatsapp/phone-utils'
 import { extractCanonicalMessageId } from '@/lib/whatsapp/message-id'
 import { isLikelyLid, isLikelyPhoneNumber } from '@/lib/whatsapp/format-phone'
-import { resolveToPhoneNumber } from '@/lib/whatsapp/resolve-lid'
+import {
+  resolveToPhoneNumber,
+  upgradeContactToPhone,
+} from '@/lib/whatsapp/resolve-lid'
 
 export type WahaMessagePayload = {
   id?: string
@@ -193,10 +199,6 @@ export async function ingestWahaMessage(args: {
     }
   }
 
-  if (!isLikelyPhoneNumber(phone) && isLikelyLid(phone)) {
-    // Still a LID — store temporarily but mark via digits; sync/backfill will upgrade
-  }
-
   const waMessageId = extractCanonicalMessageId(payload)
   const fromMe = Boolean(payload.fromMe)
   const contentType = contentTypeFromPayload(payload)
@@ -220,12 +222,67 @@ export async function ingestWahaMessage(args: {
     }
   }
 
-  const { conversationId } = await resolveConversation({
+  let { conversationId, contactId } = await resolveConversation({
     accountId,
     phone,
     contactName: pushName,
     preferConversationId: args.preferConversationId,
   })
+
+  // Fold LID stubs into the real phone contact BEFORE inserting the message
+  if (session) {
+    const contact = await prisma.contact.findUnique({
+      where: { id: contactId },
+      select: { phone: true, name: true },
+    })
+    const contactPhone = contact?.phone ?? phone
+
+    if (isLikelyLid(contactPhone) || isLikelyLid(phone) || jid.includes('@lid')) {
+      const resolved = await resolveToPhoneNumber({
+        session,
+        phoneOrLid: jid.includes('@lid') ? jid : contactPhone,
+      })
+      if (resolved.resolved && isLikelyPhoneNumber(resolved.phone)) {
+        const upgraded = await upgradeContactToPhone({
+          accountId,
+          contactId,
+          phone: resolved.phone,
+          name: pushName || resolved.pushName || contact?.name,
+        })
+        contactId = upgraded.contactId
+        phone = resolved.phone
+      } else if (pushName?.trim()) {
+        // Last resort: unique saved contact with same push name + real phone
+        const named = await prisma.contact.findMany({
+          where: {
+            accountId,
+            id: { not: contactId },
+            name: { equals: pushName.trim(), mode: 'insensitive' },
+          },
+          select: { id: true, phone: true, name: true },
+        })
+        const matches = named.filter((c) => isLikelyPhoneNumber(c.phone))
+        if (matches.length === 1) {
+          const target = matches[0]!
+          const upgraded = await upgradeContactToPhone({
+            accountId,
+            contactId,
+            phone: target.phone,
+            name: pushName,
+          })
+          contactId = upgraded.contactId
+          phone = sanitizePhoneForMeta(target.phone)
+        }
+      }
+    }
+
+    const keepId = await mergeOpenConversationsForContact({
+      accountId,
+      contactId,
+      keepId: args.preferConversationId,
+    })
+    if (keepId) conversationId = keepId
+  }
 
   const lateDup = await findExistingMessage({
     accountId,
@@ -247,8 +304,10 @@ export async function ingestWahaMessage(args: {
     await prisma.contact.updateMany({
       where: {
         accountId,
-        phoneNormalized: phone,
-        OR: [{ name: null }, { name: '' }],
+        AND: [
+          { OR: [{ phone }, { phoneNormalized: phone }] },
+          { OR: [{ name: null }, { name: '' }] },
+        ],
       },
       data: { name: pushName },
     })

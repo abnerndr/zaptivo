@@ -8,25 +8,29 @@ export function digitsOnly(raw: string | null | undefined): string {
 }
 
 /**
+ * True when the value looks like a real phone number (not a WAHA/WhatsApp LID).
+ */
+export function isLikelyPhoneNumber(raw: string | null | undefined): boolean {
+  const d = digitsOnly(raw)
+  if (d.length < 10 || d.length > 15) return false
+  // Brazil E.164 mobile/landline: 55 + DDD + local (10–13 digits total)
+  if (d.startsWith('55') && d.length >= 12 && d.length <= 13) return true
+  return !isLikelyLid(d)
+}
+
+/**
  * WhatsApp Linked IDs (LID) are opaque and often 14–15+ digits.
  * Real E.164 phones used here are typically 10–13 digits (e.g. BR 55…).
  */
 export function isLikelyLid(raw: string | null | undefined): boolean {
   const d = digitsOnly(raw)
   if (!d) return false
+  // Never treat normal Brazil numbers as LID
+  if (d.startsWith('55') && d.length >= 12 && d.length <= 13) return false
   if (d.length >= 14) return true
   // 13 digits that are NOT Brazil international → treat as LID-ish
   if (d.length === 13 && !d.startsWith('55')) return true
   return false
-}
-
-/**
- * True when the value looks like a real phone number (not a WAHA/WhatsApp LID).
- */
-export function isLikelyPhoneNumber(raw: string | null | undefined): boolean {
-  const d = digitsOnly(raw)
-  if (d.length < 10 || d.length > 15) return false
-  return !isLikelyLid(d)
 }
 
 /**

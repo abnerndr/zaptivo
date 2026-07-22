@@ -8,7 +8,7 @@ import {
   isLikelyLid,
   isLikelyPhoneNumber,
 } from '@/lib/whatsapp/format-phone'
-import { sanitizePhoneForMeta } from '@/lib/whatsapp/phone-utils'
+import { sanitizePhoneForMeta, phonesMatch } from '@/lib/whatsapp/phone-utils'
 import { mergeOpenConversationsForContact } from '@/lib/whatsapp/resolve-conversation'
 
 /**
@@ -68,13 +68,30 @@ export async function upgradeContactToPhone(args: {
   })
   if (!current) return { contactId: args.contactId }
 
-  const other = await prisma.contact.findFirst({
+  const otherExact = await prisma.contact.findFirst({
     where: {
       accountId: args.accountId,
       id: { not: args.contactId },
       OR: [{ phone }, { phoneNormalized: phone }],
     },
   })
+
+  let other = otherExact
+  if (!other) {
+    const candidates = await prisma.contact.findMany({
+      where: { accountId: args.accountId, id: { not: args.contactId } },
+      select: { id: true, phone: true, phoneNormalized: true },
+      take: 500,
+    })
+    const match = candidates.find(
+      (c) =>
+        phonesMatch(c.phone, phone) ||
+        (c.phoneNormalized ? phonesMatch(c.phoneNormalized, phone) : false),
+    )
+    if (match) {
+      other = await prisma.contact.findUnique({ where: { id: match.id } })
+    }
+  }
 
   if (other) {
     // Move conversations from LID contact → phone contact

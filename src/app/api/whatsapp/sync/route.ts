@@ -9,6 +9,10 @@ import {
   syncWahaChatForPhone,
   syncWahaChats,
 } from '@/lib/whatsapp/sync-chats'
+import {
+  dedupeAccountInbox,
+  mergeOpenConversationsForContact,
+} from '@/lib/whatsapp/resolve-conversation'
 
 /**
  * Pull recent chats/messages from WAHA into the CRM inbox.
@@ -44,7 +48,7 @@ export async function POST(req: Request) {
     if (conversationId) {
       const conv = await prisma.conversation.findFirst({
         where: { id: conversationId, accountId: ctx.accountId },
-        include: { contact: { select: { phone: true } } },
+        include: { contact: { select: { phone: true, id: true } } },
       })
       if (!conv?.contact?.phone) {
         return NextResponse.json(
@@ -65,6 +69,13 @@ export async function POST(req: Request) {
         preferConversationId: conversationId,
         sinceUnix,
       })
+
+      await mergeOpenConversationsForContact({
+        accountId: ctx.accountId,
+        contactId: conv.contact.id,
+        keepId: conversationId,
+      }).catch(() => {})
+
       return NextResponse.json({ ok: true, chats: 1, ...result })
     }
 
@@ -76,7 +87,12 @@ export async function POST(req: Request) {
         : {}),
     })
 
-    return NextResponse.json({ ok: true, ...result })
+    // Full account cleanup after broad sync (all contacts)
+    const dedupe = light
+      ? null
+      : await dedupeAccountInbox(ctx.accountId).catch(() => null)
+
+    return NextResponse.json({ ok: true, ...result, dedupe })
   } catch (err) {
     if (err instanceof Response) return err
     const message = err instanceof Error ? err.message : 'Sync failed'

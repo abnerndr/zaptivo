@@ -9,6 +9,7 @@ import {
   isLikelyPhoneNumber,
 } from '@/lib/whatsapp/format-phone'
 import { sanitizePhoneForMeta } from '@/lib/whatsapp/phone-utils'
+import { mergeOpenConversationsForContact } from '@/lib/whatsapp/resolve-conversation'
 
 /**
  * If `phoneOrLid` is a WhatsApp LID, ask WAHA for the real @c.us number.
@@ -87,6 +88,10 @@ export async function upgradeContactToPhone(args: {
         data: { name: args.name || current.name },
       })
     }
+    await mergeOpenConversationsForContact({
+      accountId: args.accountId,
+      contactId: other.id,
+    })
     // Drop the LID stub if it has no conversations left
     const left = await prisma.conversation.count({
       where: { contactId: current.id },
@@ -106,6 +111,10 @@ export async function upgradeContactToPhone(args: {
         ? { name: args.name }
         : {}),
     },
+  })
+  await mergeOpenConversationsForContact({
+    accountId: args.accountId,
+    contactId: current.id,
   })
   return { contactId: current.id }
 }

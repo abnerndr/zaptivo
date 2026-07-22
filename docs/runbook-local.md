@@ -14,8 +14,11 @@
 docker compose up -d
 npx prisma migrate deploy   # ou: npx prisma migrate dev
 npx prisma generate
+SEED_ADMIN_PASSWORD='sua-senha-forte' yarn db:seed   # cria owner/admin
 npm run dev
 ```
+
+Seed (idempotente): `SEED_ADMIN_CPF` (default `52998224725`), `SEED_ADMIN_PASSWORD` (obrigatório), `SEED_ADMIN_NAME`, `SEED_ADMIN_EMAIL`. Role = `owner`. Reset de senha: `SEED_ADMIN_RESET=1`.
 
 ## Fluxo mínimo para validar
 

@@ -6,6 +6,7 @@
 2. Crie a aplicação a partir do Git, **Build Type = Nixpacks**.
 3. Porta: **3000** (o `nixpacks.toml` já usa `${PORT:-3000}`).
 4. Domínio + HTTPS via Traefik como de costume.
+5. Use só `package-lock.json` (npm). Não versionar `pnpm-lock.yaml` — o Nixpacks prioriza pnpm e o build quebra.
 
 O build/start usam:
 
@@ -50,3 +51,17 @@ Webhook tipicamente: `https://<seu-dominio>/api/whatsapp/webhook`
 
 **Não rode `yarn db:migrate:sql`** — legado Supabase/Meta; corrompe o schema Prisma/WAHA.
 O script está bloqueado por padrão. Canônico: `npx prisma migrate deploy` (já no `start:dokploy`).
+
+## Seed do admin
+
+Depois do primeiro deploy (migrate ok), rode uma vez no container ou local apontando para o mesmo `DATABASE_URL`:
+
+```bash
+SEED_ADMIN_CPF=52998224725 \
+SEED_ADMIN_PASSWORD='troque-esta-senha' \
+SEED_ADMIN_NAME='Admin' \
+SEED_ADMIN_EMAIL=admin@seudominio.com \
+npx prisma db seed
+```
+
+Login no app com o CPF + senha. Role criada: `owner`.

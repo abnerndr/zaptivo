@@ -1,8 +1,19 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/hooks/use-auth'
-import { useRealtime } from '@/hooks/use-realtime'
+import {
+  useConversations,
+  useInboxRealtime,
+  useMessages,
+} from '@/hooks/inbox/use-inbox-queries'
+import {
+  useMarkConversationRead,
+  useSendMessage,
+  useSyncWhatsapp,
+} from '@/hooks/inbox/use-inbox-mutations'
+import { inboxKeys, type InboxContact } from '@/hooks/inbox/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,6 +25,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { StatusIcon } from '@/components/inbox/status-icon'
 import {
   contactDisplayName,
   formatWhatsAppPhone,
@@ -51,38 +64,80 @@ function formatMessageTime(iso: string): string {
   })
 }
 
-type Conversation = {
-  id: string
-  last_message_text: string | null
-  unread_count: number
-  contact: {
-    id: string
-    name: string | null
-    phone: string
-  } | null
+function formatListTime(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const now = new Date()
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  if (sameDay) {
+    return d.toLocaleTimeString('pt-BR', {
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }
+  return d.toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+  })
 }
 
-type Message = {
-  id: string
-  sender_type: string
-  content_text: string | null
-  content_type: string
-  created_at: string
+function contactInitial(contact: InboxContact | null | undefined): string {
+  const name = contact?.name?.trim()
+  if (name) return name.charAt(0).toUpperCase()
+  const phone = contact?.phone?.replace(/\D/g, '') ?? ''
+  if (phone) return phone.slice(-1)
+  return '?'
+}
+
+function ContactAvatar({
+  contact,
+  size = 'default',
+}: {
+  contact: InboxContact | null | undefined
+  size?: 'default' | 'sm' | 'lg'
+}) {
+  return (
+    <Avatar size={size} className="shrink-0">
+      {contact?.avatar_url ? (
+        <AvatarImage src={contact.avatar_url} alt="" />
+      ) : null}
+      <AvatarFallback className="bg-primary/10 font-semibold text-primary">
+        {contactInitial(contact)}
+      </AvatarFallback>
+    </Avatar>
+  )
 }
 
 export default function InboxPage() {
   const { accountId } = useAuth()
-  const [conversations, setConversations] = useState<Conversation[]>([])
+  const queryClient = useQueryClient()
   const [selected, setSelected] = useState<string | null>(null)
-  const [messages, setMessages] = useState<Message[]>([])
   const [text, setText] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [syncing, setSyncing] = useState(false)
 
   const [saveOpen, setSaveOpen] = useState(false)
   const [saveName, setSaveName] = useState('')
   const [savingContact, setSavingContact] = useState(false)
-  const [sending, setSending] = useState(false)
+
+  const {
+    data: conversations = [],
+    isLoading: loadingConversations,
+    isFetching: fetchingConversations,
+  } = useConversations(Boolean(accountId))
+
+  const { data: messages = [], isLoading: loadingMessages } = useMessages(selected)
+
+  const syncMutation = useSyncWhatsapp()
+  const sendMutation = useSendMessage()
+  const markReadMutation = useMarkConversationRead()
+
+  const selectedRef = useRef(selected)
+  selectedRef.current = selected
+  const messagesEndRef = useRef<HTMLDivElement | null>(null)
+  const emptySyncedRef = useRef(false)
 
   const selectedConversation = useMemo(
     () => conversations.find((c) => c.id === selected) ?? null,
@@ -91,205 +146,63 @@ export default function InboxPage() {
   const selectedContact = selectedConversation?.contact ?? null
   const hasSavedName = Boolean(selectedContact?.name?.trim())
 
-  const selectedRef = useRef(selected)
-  selectedRef.current = selected
-  const conversationsReq = useRef(0)
-  const messagesReq = useRef(0)
-  const messagesEndRef = useRef<HTMLDivElement | null>(null)
-
-  const loadConversations = useCallback(async () => {
-    const reqId = ++conversationsReq.current
-    const res = await fetch('/api/inbox/conversations', { cache: 'no-store' })
-    if (reqId !== conversationsReq.current) return
-    if (!res.ok) {
-      setLoading(false)
-      return
-    }
-    const data = (await res.json()) as { conversations: Conversation[] }
-    if (reqId !== conversationsReq.current) return
-    setConversations(data.conversations)
-    setLoading(false)
-    return data.conversations
-  }, [])
-
-  const loadMessages = useCallback(async (id: string) => {
-    const reqId = ++messagesReq.current
-    const res = await fetch(
-      `/api/inbox/messages?conversationId=${encodeURIComponent(id)}`,
-      { cache: 'no-store' },
-    )
-    if (reqId !== messagesReq.current) return
-    if (!res.ok) return
-    const data = (await res.json()) as { messages?: Message[] }
-    if (reqId !== messagesReq.current) return
-    if (selectedRef.current && selectedRef.current !== id) return
-    const serverMessages = data.messages ?? []
-    setMessages((prev) => {
-      const map = new Map<string, Message>()
-      // Keep anything we already show (protects against stale responses)
-      for (const m of prev) {
-        if (!m.id.startsWith('tmp-')) map.set(m.id, m)
-      }
-      for (const m of serverMessages) {
-        map.set(m.id, m)
-      }
-      for (const m of prev) {
-        if (!m.id.startsWith('tmp-')) continue
-        const echoed = serverMessages.some(
-          (s) =>
-            s.sender_type === 'agent' &&
-            s.content_text === m.content_text &&
-            Math.abs(
-              new Date(s.created_at).getTime() -
-                new Date(m.created_at).getTime(),
-            ) < 120_000,
-        )
-        if (!echoed) map.set(m.id, m)
-      }
-      return [...map.values()].sort((a, b) =>
-        a.created_at.localeCompare(b.created_at),
-      )
-    })
-  }, [])
-
-  const refreshInbox = useCallback(() => {
-    void loadConversations()
-    const id = selectedRef.current
-    if (id) void loadMessages(id)
-  }, [loadConversations, loadMessages])
+  const sseConnected = useInboxRealtime(accountId)
+  const syncMutate = syncMutation.mutate
+  const syncBusyRef = useRef(false)
+  const sseConnectedRef = useRef(sseConnected)
+  sseConnectedRef.current = sseConnected
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const syncFromWaha = useCallback(async () => {
-    setSyncing(true)
-    try {
-      const res = await fetch('/api/whatsapp/sync', { method: 'POST' })
-      const data = (await res.json().catch(() => ({}))) as {
-        error?: string
-        messages?: number
-        chats?: number
-        lidsUpgraded?: number
-      }
-      if (!res.ok) {
-        toast.error(data.error ?? 'Falha ao sincronizar com o WhatsApp')
-        return
-      }
-      toast.success(
-        `Sincronizado: ${data.chats ?? 0} chats, ${data.messages ?? 0} msgs${
-          data.lidsUpgraded
-            ? `, ${data.lidsUpgraded} números resolvidos`
-            : ''
-        }`,
-      )
-      refreshInbox()
-    } finally {
-      setSyncing(false)
-    }
-  }, [refreshInbox])
-
+  // Auto full-sync once if inbox empty
   useEffect(() => {
-    void (async () => {
-      const list = await loadConversations()
-      if (list && list.length === 0) {
-        void syncFromWaha()
-      }
-    })()
-  }, [loadConversations, syncFromWaha])
+    if (loadingConversations || emptySyncedRef.current) return
+    if (conversations.length === 0) {
+      emptySyncedRef.current = true
+      syncMutate(undefined)
+    }
+  }, [loadingConversations, conversations.length, syncMutate])
 
+  // Mark read when selecting a conversation
   useEffect(() => {
-    if (selected) {
-      setMessages([])
-      void loadMessages(selected)
-    } else {
-      setMessages([])
+    if (!selected) return
+    const conv = conversations.find((c) => c.id === selected)
+    if (conv && conv.unread_count > 0) {
+      markReadMutation.mutate(selected)
     }
-  }, [selected, loadMessages])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on select change
+  }, [selected])
 
-  // Realtime via SSE
-  useRealtime(accountId, (payload) => {
-    if (payload.table === 'messages' || payload.table === 'conversations') {
-      refreshInbox()
-    }
-  })
-
-  // Fallback polling — DB refresh (webhook may land via prod into same DB)
+  // Soft fallback: only on tab focus, and only if SSE is down. Never poll in a loop.
   useEffect(() => {
     if (!accountId) return
-    const tick = () => {
+
+    const onFocus = () => {
       if (typeof document !== 'undefined' && document.hidden) return
-      refreshInbox()
+      void queryClient.invalidateQueries({ queryKey: inboxKeys.all })
+      if (sseConnectedRef.current || syncBusyRef.current) return
+      syncBusyRef.current = true
+      syncMutate(
+        selectedRef.current
+          ? { light: true, conversationId: selectedRef.current }
+          : { light: true },
+        {
+          onSettled: () => {
+            syncBusyRef.current = false
+          },
+        },
+      )
     }
-    const id = setInterval(tick, 2000)
-    const onFocus = () => refreshInbox()
+
     window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onFocus)
     return () => {
-      clearInterval(id)
       window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onFocus)
     }
-  }, [accountId, refreshInbox])
-
-  // WAHA pull on open thread — localhost can't receive webhooks
-  useEffect(() => {
-    if (!accountId || !selected) return
-    let busy = false
-    let cancelled = false
-    const pull = async () => {
-      if (busy || cancelled) return
-      if (typeof document !== 'undefined' && document.hidden) return
-      busy = true
-      const conversationId = selected
-      try {
-        const res = await fetch(
-          `/api/whatsapp/sync?light=1&conversationId=${encodeURIComponent(conversationId)}`,
-          { method: 'POST' },
-        )
-        if (!res.ok) return
-        if (!cancelled && selectedRef.current === conversationId) {
-          void loadMessages(conversationId)
-          void loadConversations()
-        }
-      } catch {
-        /* ignore */
-      } finally {
-        busy = false
-      }
-    }
-    void pull()
-    const id = setInterval(() => void pull(), 2500)
-    return () => {
-      cancelled = true
-      clearInterval(id)
-    }
-  }, [accountId, selected, loadMessages, loadConversations])
-
-  // Background: refresh recent chats list from WAHA (sidebar) every 15s
-  useEffect(() => {
-    if (!accountId) return
-    let busy = false
-    let cancelled = false
-    const pull = async () => {
-      if (busy || cancelled) return
-      if (typeof document !== 'undefined' && document.hidden) return
-      busy = true
-      try {
-        await fetch('/api/whatsapp/sync?light=1', { method: 'POST' })
-        if (!cancelled) refreshInbox()
-      } catch {
-        /* ignore */
-      } finally {
-        busy = false
-      }
-    }
-    const id = setInterval(() => void pull(), 15000)
-    return () => {
-      cancelled = true
-      clearInterval(id)
-    }
-  }, [accountId, refreshInbox])
+  }, [accountId, queryClient, syncMutate])
 
   function openSaveContact() {
     if (!selectedContact) return
@@ -319,17 +232,19 @@ export default function InboxPage() {
         toast.error(data.error ?? 'Falha ao salvar contato')
         return
       }
-      setConversations((prev) =>
-        prev.map((c) =>
-          c.contact?.id === selectedContact.id
-            ? {
-                ...c,
-                contact: c.contact
-                  ? { ...c.contact, name: data.name ?? name }
-                  : c.contact,
-              }
-            : c,
-        ),
+      queryClient.setQueryData(
+        inboxKeys.conversations(),
+        (prev: typeof conversations | undefined) =>
+          prev?.map((c) =>
+            c.contact?.id === selectedContact.id
+              ? {
+                  ...c,
+                  contact: c.contact
+                    ? { ...c.contact, name: data.name ?? name }
+                    : c.contact,
+                }
+              : c,
+          ),
       )
       toast.success(
         hasSavedName ? 'Contato atualizado' : 'Contato salvo na agenda',
@@ -340,69 +255,23 @@ export default function InboxPage() {
     }
   }
 
-  const send = async () => {
-    if (!selected || !text.trim() || sending) return
+  const send = () => {
+    if (!selected || !text.trim() || sendMutation.isPending) return
     const content = text.trim()
     const tempId = `tmp-${Date.now()}`
-    const optimistic: Message = {
-      id: tempId,
-      sender_type: 'agent',
-      content_text: content,
-      content_type: 'text',
-      created_at: new Date().toISOString(),
-    }
     setText('')
-    setMessages((prev) => [...prev, optimistic])
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.id === selected
-          ? { ...c, last_message_text: content }
-          : c,
-      ),
-    )
-    setSending(true)
-    try {
-      const res = await fetch('/api/whatsapp/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          conversation_id: selected,
-          message_type: 'text',
-          content_text: content,
-        }),
-      })
-      const data = (await res.json().catch(() => ({}))) as {
-        error?: string
-        messageId?: string
-        contentText?: string | null
-        contentType?: string
-        createdAt?: string
-      }
-      if (!res.ok) {
-        setMessages((prev) => prev.filter((m) => m.id !== tempId))
-        toast.error(data.error ?? 'Falha ao enviar')
-        return
-      }
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === tempId
-            ? {
-                id: data.messageId ?? tempId,
-                sender_type: 'agent',
-                content_text: data.contentText ?? content,
-                content_type: data.contentType ?? 'text',
-                created_at: data.createdAt ?? optimistic.created_at,
-              }
-            : m,
-        ),
-      )
-      void loadConversations()
-    } finally {
-      setSending(false)
-    }
+    sendMutation.mutate({
+      conversationId: selected,
+      content,
+      tempId,
+    })
   }
 
-  if (loading) {
+  const selectConversation = (id: string) => {
+    setSelected(id)
+  }
+
+  if (loadingConversations && conversations.length === 0) {
     return (
       <div className="flex h-full items-center justify-center gap-2 text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin" /> Carregando inbox…
@@ -413,15 +282,20 @@ export default function InboxPage() {
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col">
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
-        <p className="text-sm font-medium text-foreground">Inbox</p>
+        <p className="text-sm font-medium text-foreground">
+          Inbox
+          {fetchingConversations ? (
+            <Loader2 className="ml-2 inline size-3 animate-spin text-muted-foreground" />
+          ) : null}
+        </p>
         <Button
           type="button"
           variant="outline"
           size="sm"
-          disabled={syncing}
-          onClick={() => void syncFromWaha()}
+          disabled={syncMutation.isPending}
+          onClick={() => syncMutation.mutate(undefined)}
         >
-          {syncing ? (
+          {syncMutation.isPending ? (
             <Loader2 className="mr-2 size-4 animate-spin" />
           ) : (
             <RefreshCw className="mr-2 size-4" />
@@ -443,27 +317,43 @@ export default function InboxPage() {
               <button
                 key={c.id}
                 type="button"
-                className={`block w-full border-b border-border px-3 py-3 text-left hover:bg-muted ${
+                className={`flex w-full gap-3 border-b border-border px-3 py-3 text-left hover:bg-muted ${
                   selected === c.id ? 'bg-muted' : ''
                 }`}
-                onClick={() => setSelected(c.id)}
+                onClick={() => selectConversation(c.id)}
               >
-                <div className="truncate font-medium text-foreground">
-                  {title}
-                </div>
-                {showPhoneUnderName ? (
-                  <div className="truncate text-xs tabular-nums text-muted-foreground">
-                    {phoneLabel}
+                <ContactAvatar contact={c.contact} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="truncate font-medium text-foreground">
+                      {title}
+                    </span>
+                    <span
+                      className={`shrink-0 text-[10px] tabular-nums ${
+                        c.unread_count > 0
+                          ? 'font-medium text-primary'
+                          : 'text-muted-foreground'
+                      }`}
+                    >
+                      {formatListTime(c.last_message_at ?? null)}
+                    </span>
                   </div>
-                ) : null}
-                <div className="truncate text-xs text-muted-foreground">
-                  {c.last_message_text || '—'}
+                  {showPhoneUnderName ? (
+                    <div className="truncate text-xs tabular-nums text-muted-foreground">
+                      {phoneLabel}
+                    </div>
+                  ) : null}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="truncate text-xs text-muted-foreground">
+                      {c.last_message_text || '—'}
+                    </div>
+                    {c.unread_count > 0 ? (
+                      <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
+                        {c.unread_count > 99 ? '99+' : c.unread_count}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
-                {c.unread_count > 0 && (
-                  <span className="text-xs text-primary">
-                    {c.unread_count} novas
-                  </span>
-                )}
               </button>
             )
           })}
@@ -482,18 +372,21 @@ export default function InboxPage() {
           {selected && selectedContact ? (
             <>
               <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-foreground">
-                    {contactDisplayName(selectedContact)}
-                  </p>
-                  <p className="truncate text-xs tabular-nums text-muted-foreground">
-                    {formatWhatsAppPhone(selectedContact.phone)}
-                    {isLikelyLid(selectedContact.phone) ? (
-                      <span className="ml-1 text-amber-600 dark:text-amber-400">
-                        (ainda sem telefone — clique em Sincronizar)
-                      </span>
-                    ) : null}
-                  </p>
+                <div className="flex min-w-0 items-center gap-3">
+                  <ContactAvatar contact={selectedContact} size="lg" />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-foreground">
+                      {contactDisplayName(selectedContact)}
+                    </p>
+                    <p className="truncate text-xs tabular-nums text-muted-foreground">
+                      {formatWhatsAppPhone(selectedContact.phone)}
+                      {isLikelyLid(selectedContact.phone) ? (
+                        <span className="ml-1 text-amber-600 dark:text-amber-400">
+                          (ainda sem telefone — clique em Sincronizar)
+                        </span>
+                      ) : null}
+                    </p>
+                  </div>
                 </div>
                 <Button
                   type="button"
@@ -515,6 +408,17 @@ export default function InboxPage() {
                 </Button>
               </header>
               <div className="flex-1 space-y-2 overflow-y-auto p-4">
+                {loadingMessages && messages.length === 0 ? (
+                  <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="size-4 animate-spin" />
+                    Carregando mensagens…
+                  </div>
+                ) : null}
+                {!loadingMessages && messages.length === 0 ? (
+                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                    Nenhuma mensagem nesta conversa.
+                  </div>
+                ) : null}
                 {messages.map((m) => {
                   const outgoing =
                     m.sender_type === 'agent' || m.sender_type === 'bot'
@@ -534,13 +438,18 @@ export default function InboxPage() {
                       >
                         {m.content_text || `[${m.content_type}]`}
                       </div>
-                      <time
-                        dateTime={m.created_at}
-                        className="px-1 text-[10px] tabular-nums text-muted-foreground"
-                        title={new Date(m.created_at).toLocaleString('pt-BR')}
-                      >
-                        {formatMessageTime(m.created_at)}
-                      </time>
+                      <div className="flex items-center gap-1 px-1">
+                        <time
+                          dateTime={m.created_at}
+                          className="text-[10px] tabular-nums text-muted-foreground"
+                          title={new Date(m.created_at).toLocaleString(
+                            'pt-BR',
+                          )}
+                        >
+                          {formatMessageTime(m.created_at)}
+                        </time>
+                        {outgoing ? <StatusIcon status={m.status} /> : null}
+                      </div>
                     </div>
                   )
                 })}
@@ -552,11 +461,14 @@ export default function InboxPage() {
                   onChange={(e) => setText(e.target.value)}
                   placeholder="Mensagem…"
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') void send()
+                    if (e.key === 'Enter') send()
                   }}
                 />
-                <Button onClick={() => void send()} disabled={sending}>
-                  {sending ? (
+                <Button
+                  onClick={send}
+                  disabled={sendMutation.isPending}
+                >
+                  {sendMutation.isPending ? (
                     <Loader2 className="size-4 animate-spin" />
                   ) : (
                     'Enviar'

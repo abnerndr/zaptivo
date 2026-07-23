@@ -10,7 +10,15 @@ import { isLikelyLid, isLikelyPhoneNumber } from '@/lib/whatsapp/format-phone'
 import {
   resolveToPhoneNumber,
   upgradeContactToPhone,
+  findContactByLid,
+  findPhoneContactByPushName,
+  findContactByPhonePrefix,
+  rememberContactLid,
 } from '@/lib/whatsapp/resolve-lid'
+import { pickContactJid, pickLidJid } from '@/lib/whatsapp/inbound-jid'
+import { ensureContactAvatar } from '@/lib/whatsapp/ensure-contact-avatar'
+
+export { pickContactJid, pickLidJid } from '@/lib/whatsapp/inbound-jid'
 
 export type WahaMessagePayload = {
   id?: string
@@ -53,31 +61,6 @@ function isGroupOrBroadcast(jid: string | undefined | null): boolean {
     jid.includes('status@broadcast') ||
     jid.includes('@broadcast')
   )
-}
-
-/** Prefer real phone JID over @lid (NOWEB/GOWS). */
-export function pickContactJid(payload: WahaMessagePayload): string | null {
-  const key = payload._data?.key
-  const info = payload._data?.Info
-  const candidates = [
-    key?.remoteJidAlt,
-    info?.RecipientAlt,
-    info?.SenderAlt,
-    payload.fromMe ? payload.to : payload.from,
-    key?.remoteJid,
-    info?.Chat,
-    payload.fromMe ? payload.from : payload.to,
-  ]
-  for (const jid of candidates) {
-    if (!jid || isGroupOrBroadcast(jid)) continue
-    if (jid.includes('@lid')) continue
-    return jid
-  }
-  for (const jid of candidates) {
-    if (!jid || isGroupOrBroadcast(jid)) continue
-    return jid
-  }
-  return null
 }
 
 export function jidToPhone(jid: string): string {
@@ -187,15 +170,66 @@ export async function ingestWahaMessage(args: {
     payload._data?.notifyName ||
     null
 
-  // Resolve WhatsApp Linked ID → real phone before creating/finding contact
-  if (session && (isLikelyLid(phone) || jid.includes('@lid'))) {
+  const lidJid = pickLidJid(payload) || (jid.includes('@lid') ? jid : null)
+  let resolvedLid: string | null = lidJid
+
+  // Resolve WhatsApp Linked ID → real phone BEFORE creating a contact stub
+  if (session && (isLikelyLid(phone) || jid.includes('@lid') || lidJid)) {
     const resolved = await resolveToPhoneNumber({
       session,
-      phoneOrLid: jid.includes('@') ? jid : phone,
+      phoneOrLid: lidJid || (jid.includes('@') ? jid : phone),
     })
+    if (resolved.lid) resolvedLid = resolved.lid
     if (resolved.resolved && isLikelyPhoneNumber(resolved.phone)) {
       phone = resolved.phone
       if (!pushName && resolved.pushName) pushName = resolved.pushName
+    } else if (isLikelyLid(phone) || jid.includes('@lid')) {
+      // Cache hit: we already know this LID belongs to a phone contact
+      const byLid = await findContactByLid({
+        accountId,
+        lid: resolvedLid || phone,
+      })
+      if (byLid && isLikelyPhoneNumber(byLid.phone)) {
+        phone = sanitizePhoneForMeta(byLid.phone)
+      } else {
+        // WAHA junk JID e.g. 551699635630251@lid → prefix of real phone
+        const byPrefix = await findContactByPhonePrefix({
+          accountId,
+          phoneOrLid: phone,
+        })
+        if (byPrefix) {
+          phone = sanitizePhoneForMeta(byPrefix.phone)
+        } else if (pushName?.trim()) {
+          // Match saved contact by WhatsApp push name (e.g. "Matheus Prado")
+          const byName = await findPhoneContactByPushName({
+            accountId,
+            pushName,
+          })
+          if (byName) {
+            phone = sanitizePhoneForMeta(byName.phone)
+          }
+        }
+      }
+    } else {
+      // Even non-LID JIDs can be phone+junk — try prefix before creating
+      const byPrefix = await findContactByPhonePrefix({
+        accountId,
+        phoneOrLid: phone,
+      })
+      if (byPrefix && byPrefix.phone !== phone) {
+        phone = sanitizePhoneForMeta(byPrefix.phone)
+      }
+    }
+  }
+
+  // Safety net: WAHA junk suffixes / unresolved LIDs → known phone contact
+  if (!isLikelyPhoneNumber(phone) || isLikelyLid(phone)) {
+    const byPrefix = await findContactByPhonePrefix({
+      accountId,
+      phoneOrLid: phone,
+    })
+    if (byPrefix) {
+      phone = sanitizePhoneForMeta(byPrefix.phone)
     }
   }
 
@@ -233,45 +267,57 @@ export async function ingestWahaMessage(args: {
   if (session) {
     const contact = await prisma.contact.findUnique({
       where: { id: contactId },
-      select: { phone: true, name: true },
+      select: { phone: true, name: true, whatsappLid: true },
     })
     const contactPhone = contact?.phone ?? phone
 
-    if (isLikelyLid(contactPhone) || isLikelyLid(phone) || jid.includes('@lid')) {
+    if (isLikelyLid(contactPhone) || isLikelyLid(phone) || jid.includes('@lid') || lidJid) {
       const resolved = await resolveToPhoneNumber({
         session,
-        phoneOrLid: jid.includes('@lid') ? jid : contactPhone,
+        phoneOrLid: lidJid || (jid.includes('@lid') ? jid : contactPhone),
       })
+      if (resolved.lid) resolvedLid = resolved.lid
       if (resolved.resolved && isLikelyPhoneNumber(resolved.phone)) {
         const upgraded = await upgradeContactToPhone({
           accountId,
           contactId,
           phone: resolved.phone,
           name: pushName || resolved.pushName || contact?.name,
+          lid: resolved.lid || resolvedLid,
         })
         contactId = upgraded.contactId
         phone = resolved.phone
-      } else if (pushName?.trim()) {
-        // Last resort: unique saved contact with same push name + real phone
-        const named = await prisma.contact.findMany({
-          where: {
-            accountId,
-            id: { not: contactId },
-            name: { equals: pushName.trim(), mode: 'insensitive' },
-          },
-          select: { id: true, phone: true, name: true },
+      } else {
+        const byPrefix = await findContactByPhonePrefix({
+          accountId,
+          phoneOrLid: contactPhone,
         })
-        const matches = named.filter((c) => isLikelyPhoneNumber(c.phone))
-        if (matches.length === 1) {
-          const target = matches[0]!
+        if (byPrefix && byPrefix.id !== contactId) {
           const upgraded = await upgradeContactToPhone({
             accountId,
             contactId,
-            phone: target.phone,
-            name: pushName,
+            phone: byPrefix.phone,
+            name: pushName || byPrefix.name || contact?.name,
+            lid: resolvedLid,
           })
           contactId = upgraded.contactId
-          phone = sanitizePhoneForMeta(target.phone)
+          phone = sanitizePhoneForMeta(byPrefix.phone)
+        } else if (pushName?.trim() && isLikelyLid(contactPhone)) {
+          const byName = await findPhoneContactByPushName({
+            accountId,
+            pushName,
+          })
+          if (byName) {
+            const upgraded = await upgradeContactToPhone({
+              accountId,
+              contactId,
+              phone: byName.phone,
+              name: pushName,
+              lid: resolvedLid,
+            })
+            contactId = upgraded.contactId
+            phone = sanitizePhoneForMeta(byName.phone)
+          }
         }
       }
     }
@@ -310,6 +356,24 @@ export async function ingestWahaMessage(args: {
         ],
       },
       data: { name: pushName },
+    })
+  }
+
+  // Always remember LID↔phone when we know both
+  if (resolvedLid && isLikelyPhoneNumber(phone)) {
+    await rememberContactLid({
+      accountId,
+      contactId,
+      lid: resolvedLid,
+    })
+  }
+
+  if (session) {
+    void ensureContactAvatar({
+      accountId,
+      contactId,
+      session,
+      phone,
     })
   }
 

@@ -175,6 +175,8 @@ model Contact {
   userId          String?  @map("user_id") @db.Uuid
   phone           String
   phoneNormalized String?  @map("phone_normalized")
+  /** WhatsApp Linked ID digits (without @lid) — maps inbound @lid → this contact */
+  whatsappLid     String?  @map("whatsapp_lid")
   name            String?
   email           String?
   company         String?
@@ -192,6 +194,7 @@ model Contact {
   @@index([accountId])
   @@index([phone])
   @@index([accountId, phoneNormalized])
+  @@index([accountId, whatsappLid])
   @@map("contacts")
 }
 

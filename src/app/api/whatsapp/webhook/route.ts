@@ -6,6 +6,10 @@ import {
   ingestWahaMessage,
   type WahaMessagePayload,
 } from '@/lib/whatsapp/inbound'
+import {
+  ingestWahaAck,
+  type WahaAckPayload,
+} from '@/lib/whatsapp/ack'
 
 /**
  * WAHA inbound webhook.
@@ -61,6 +65,22 @@ export async function POST(req: Request) {
       accountId: config.accountId,
     }).catch(() => {})
     return NextResponse.json({ ok: true })
+  }
+
+  if (event === 'message.ack') {
+    try {
+      const result = await ingestWahaAck({
+        accountId: config.accountId,
+        payload: payload as WahaAckPayload,
+      })
+      return NextResponse.json(result)
+    } catch (err) {
+      console.error('[whatsapp/webhook] ack failed:', err)
+      return NextResponse.json(
+        { ok: false, error: 'ack_failed' },
+        { status: 500 },
+      )
+    }
   }
 
   if (event === 'message' || event === 'message.any') {

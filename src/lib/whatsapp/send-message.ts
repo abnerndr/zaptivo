@@ -20,6 +20,7 @@ import {
 import { normalizeWahaMessageId } from '@/lib/whatsapp/message-id'
 import { isLikelyLid, isLikelyPhoneNumber } from '@/lib/whatsapp/format-phone'
 import {
+  learnLidForPhoneContact,
   resolveToPhoneNumber,
   upgradeContactToPhone,
 } from '@/lib/whatsapp/resolve-lid'
@@ -64,6 +65,7 @@ export interface SendMessageResult {
   contentText: string | null
   contentType: string
   createdAt: string
+  status: string
 }
 
 function renderTemplateBody(body: string, params: string[]): string {
@@ -407,6 +409,14 @@ export async function sendMessageToConversation(
     accountId,
   }).catch(() => {})
 
+  // Cache LID for this phone so future inbound @lid events hit this thread
+  void learnLidForPhoneContact({
+    accountId,
+    contactId,
+    session: config.wahaSession,
+    phone: sanitizedPhone,
+  })
+
   return {
     messageId: messageRecord.id,
     whatsappMessageId: waMessageId,
@@ -414,5 +424,6 @@ export async function sendMessageToConversation(
     contentText: messageRecord.contentText,
     contentType: messageRecord.contentType,
     createdAt: messageRecord.createdAt.toISOString(),
+    status: messageRecord.status,
   }
 }

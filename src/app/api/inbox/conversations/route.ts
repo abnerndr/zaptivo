@@ -70,7 +70,7 @@ export async function GET(req: Request) {
         status: c.status,
         unread_count: c.unreadCount,
         last_message_text: c.lastMessageText,
-        last_message_at: c.lastMessageAt,
+        last_message_at: c.lastMessageAt?.toISOString() ?? null,
         assigned_agent_id: c.assignedAgentId,
         contact: c.contact
           ? {

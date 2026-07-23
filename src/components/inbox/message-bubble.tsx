@@ -4,10 +4,6 @@ import { useState, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import type { Message, MessageReaction } from "@/types";
 import {
-  Clock,
-  Check,
-  CheckCheck,
-  XCircle,
   FileText,
   MapPin,
   LayoutTemplate,
@@ -18,6 +14,7 @@ import {
 import { format } from "date-fns";
 import { ReplyQuote } from "./reply-quote";
 import { MessageReactions } from "./message-reactions";
+import { StatusIcon } from "./status-icon";
 import { InteractivePreview } from "@/components/interactive/interactive-preview";
 import { useTranslations } from "next-intl";
 
@@ -28,23 +25,6 @@ interface MessageBubbleProps {
   reactions?: MessageReaction[];
   currentUserId?: string;
   onToggleReaction?: (emoji: string) => void;
-}
-
-function StatusIcon({ status }: { status: Message["status"] }) {
-  switch (status) {
-    case "sending":
-      return <Clock className="h-3 w-3 text-muted-foreground" />;
-    case "sent":
-      return <Check className="h-3 w-3 text-muted-foreground" />;
-    case "delivered":
-      return <CheckCheck className="h-3 w-3 text-muted-foreground" />;
-    case "read":
-      return <CheckCheck className="h-3 w-3 text-blue-400" />;
-    case "failed":
-      return <XCircle className="h-3 w-3 text-red-400" />;
-    default:
-      return null;
-  }
 }
 
 function MediaUnavailable({ label, t }: { label: string, t: ReturnType<typeof useTranslations> }) {

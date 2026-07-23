@@ -16,6 +16,7 @@ import {
   upgradeContactToPhone,
 } from '@/lib/whatsapp/resolve-lid'
 import { prisma } from '@/lib/db/prisma'
+import { ensureContactAvatar } from '@/lib/whatsapp/ensure-contact-avatar'
 
 function chatToPayload(msg: WahaChatMessage): WahaMessagePayload {
   return {
@@ -101,6 +102,9 @@ export async function syncWahaChats(args: {
       (a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0),
     )
 
+    let avatarContactId: string | null = null
+    let avatarPhone: string | null = null
+
     for (const row of ordered) {
       const payload = chatToPayload(row)
       if (chatId.includes('@c.us')) {
@@ -143,8 +147,21 @@ export async function syncWahaChats(args: {
               name: chat.name || conv.contact.name,
             })
           }
+          if (conv && !avatarContactId) {
+            avatarContactId = conv.contactId
+            avatarPhone = phone
+          }
         }
       }
+    }
+
+    if (avatarContactId && avatarPhone) {
+      void ensureContactAvatar({
+        accountId: args.accountId,
+        contactId: avatarContactId,
+        session: args.session,
+        phone: avatarPhone,
+      })
     }
   }
 

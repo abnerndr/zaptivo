@@ -21,15 +21,38 @@ export function normalizePhone(phone: string): string {
  * Compare two phone numbers accounting for trunk prefix differences.
  * e.g. "370063949836" (with trunk 0) matches "37063949836" (without trunk 0)
  * by comparing the last 8 digits.
+ *
+ * Also treats a valid phone as matching a longer digit string that starts
+ * with it — WAHA occasionally delivers JIDs like `551699635630251@lid`
+ * that are the real BR number plus a junk suffix.
  */
 export function phonesMatch(phone1: string, phone2: string): boolean {
   const n1 = normalizePhone(phone1)
   const n2 = normalizePhone(phone2)
+  if (!n1 || !n2) return false
   if (n1 === n2) return true
-  if (n1.length >= 8 && n2.length >= 8) {
-    return n1.slice(-8) === n2.slice(-8)
+  if (n1.length >= 8 && n2.length >= 8 && n1.slice(-8) === n2.slice(-8)) {
+    return true
   }
+
+  const [shorter, longer] = n1.length <= n2.length ? [n1, n2] : [n2, n1]
+  if (
+    longer.startsWith(shorter) &&
+    longer.length - shorter.length <= 4 &&
+    isValidBrazilOrE164Phone(shorter)
+  ) {
+    return true
+  }
+
   return false
+}
+
+function isValidBrazilOrE164Phone(digits: string): boolean {
+  if (digits.length < 10 || digits.length > 13) return false
+  if (digits.startsWith('55') && (digits.length === 12 || digits.length === 13)) {
+    return true
+  }
+  return digits.length >= 10 && digits.length <= 13
 }
 
 /**

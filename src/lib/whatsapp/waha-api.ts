@@ -87,7 +87,7 @@ function webhookConfig() {
   }
   return {
     url: webhookUrl,
-    events: ['session.status', 'message', 'message.any'],
+    events: ['session.status', 'message', 'message.any', 'message.ack'],
     ...(secret
       ? {
           hmac: { key: secret },
@@ -220,16 +220,86 @@ export async function resolveLidToPhone(
   return data.pn ?? null
 }
 
+/** Map phone chat id (@c.us) → Linked ID (@lid). */
+export async function resolvePhoneToLid(
+  session: string,
+  phone: string,
+): Promise<string | null> {
+  const digits = phone.replace(/\D/g, '')
+  if (!digits) return null
+  const candidates = [
+    `${digits}@c.us`,
+    digits,
+  ]
+  for (const pn of candidates) {
+    const encoded = encodeURIComponent(pn)
+    try {
+      const res = await fetch(
+        `${baseUrl()}/api/${encodeURIComponent(session)}/lids/pn/${encoded}`,
+        { headers: headers() },
+      )
+      if (!res.ok) continue
+      const data = (await res.json()) as { lid?: string | null; pn?: string }
+      if (data.lid) return data.lid
+    } catch (err) {
+      console.warn('[waha] resolvePhoneToLid', err)
+    }
+  }
+  return null
+}
+
 export async function getWahaContact(
   session: string,
   contactId: string,
-): Promise<{ id?: string; name?: string; pushname?: string } | null> {
+): Promise<{
+  id?: string
+  number?: string | null
+  name?: string
+  pushname?: string
+} | null> {
   const res = await fetch(
     `${baseUrl()}/api/contacts?session=${encodeURIComponent(session)}&contactId=${encodeURIComponent(contactId)}`,
     { headers: headers() },
   )
   if (!res.ok) return null
-  return (await res.json()) as { id?: string; name?: string; pushname?: string }
+  return (await res.json()) as {
+    id?: string
+    number?: string | null
+    name?: string
+    pushname?: string
+  }
+}
+
+/**
+ * Fetch WhatsApp profile picture URL for a contact.
+ * @see https://waha.devlike.pro/docs/how-to/contacts/#get-contact-profile-picture
+ */
+export async function getContactProfilePicture(
+  session: string,
+  contactId: string,
+): Promise<string | null> {
+  const id = contactId.includes('@')
+    ? contactId
+    : `${contactId.replace(/\D/g, '')}@c.us`
+  const params = new URLSearchParams({
+    session,
+    contactId: id,
+  })
+  try {
+    const res = await fetch(
+      `${baseUrl()}/api/contacts/profile-picture?${params}`,
+      { headers: headers() },
+    )
+    if (!res.ok) return null
+    const data = (await res.json()) as {
+      profilePictureURL?: string | null
+      url?: string | null
+    }
+    return data.profilePictureURL ?? data.url ?? null
+  } catch (err) {
+    console.warn('[waha] getContactProfilePicture', err)
+    return null
+  }
 }
 
 export async function sendText(args: {

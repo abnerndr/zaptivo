@@ -50,6 +50,15 @@ describe("phonesMatch", () => {
     expect(phonesMatch("+37063949836", "+37063949837")).toBe(false);
   });
 
+  it("matches a valid BR phone against a WAHA junk-suffix JID", () => {
+    expect(phonesMatch("5516996356302", "551699635630251")).toBe(true);
+    expect(phonesMatch("551699635630251", "5516996356302")).toBe(true);
+  });
+
+  it("does not match unrelated BR numbers that share a DDD prefix", () => {
+    expect(phonesMatch("5516996356302", "5516996356399")).toBe(false);
+  });
+
   it("rejects very short inputs that would false-positive on tail match", () => {
     // Only 7 digits — the last-8 fallback is gated to len>=8 on both
     // sides to avoid declaring "12345" and "67890-12345" a match.

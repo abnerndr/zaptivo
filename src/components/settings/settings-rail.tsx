@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 
@@ -27,43 +28,43 @@ const SECTION_MESSAGE_KEY: Record<SettingsSection, string> = {
   api: 'api',
 };
 
-// Width at/above which the rail is a vertical column (already in view, so
-// no auto-scroll needed). Mirrors the Tailwind `lg:` breakpoint that
-// drives the row→column switch in the markup below — keep the two in sync.
 const RAIL_DESKTOP_MIN_PX = 1024;
 
 /**
- * The settings left rail — grouped, vertical on desktop and a
- * horizontal scroller on narrow screens (mirrors the mockup's ≤920px
- * behaviour). The active item auto-scrolls into view when the rail is
- * horizontal so a deep-linked section is never off-screen.
+ * Settings left rail — grouped, vertical on desktop and a horizontal
+ * scroller on narrow screens. Uses <Link> so tab switches are real
+ * navigations (more reliable than router.replace + searchParams alone).
  */
 export function SettingsRail({
   active,
-  onSelect,
   hints,
 }: {
   active: SettingsSection;
-  onSelect: (section: SettingsSection) => void;
   hints?: Partial<Record<SettingsSection, ReactNode>>;
 }) {
   const t = useTranslations('Settings');
-  const activeRef = useRef<HTMLButtonElement>(null);
+  const navRef = useRef<HTMLElement>(null);
+  const activeRef = useRef<HTMLAnchorElement>(null);
 
-  // When horizontal (mobile), keep the active chip in view. On desktop
-  // the rail is a static column, so skip.
+  // Keep the active chip in view on the horizontal (mobile) rail only.
+  // Scroll the nav itself — never scrollIntoView (that walks ancestors
+  // and jumps the dashboard main pane).
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (window.matchMedia(`(min-width: ${RAIL_DESKTOP_MIN_PX}px)`).matches) return;
-    activeRef.current?.scrollIntoView({
-      inline: 'center',
-      block: 'nearest',
-      behavior: 'smooth',
-    });
+    if (window.matchMedia(`(min-width: ${RAIL_DESKTOP_MIN_PX}px)`).matches) {
+      return;
+    }
+    const nav = navRef.current;
+    const item = activeRef.current;
+    if (!nav || !item) return;
+    const left =
+      item.offsetLeft - nav.clientWidth / 2 + item.clientWidth / 2;
+    nav.scrollTo({ left: Math.max(0, left), behavior: 'smooth' });
   }, [active]);
 
   return (
     <nav
+      ref={navRef}
       aria-label="Settings sections"
       className={cn(
         'flex gap-1 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
@@ -78,7 +79,7 @@ export function SettingsRail({
         return (
           <div
             key={group}
-            className="flex shrink-0 gap-1 lg:flex-col lg:gap-0.5"
+            className="flex shrink-0 gap-1 lg:w-full lg:flex-col lg:gap-0.5"
           >
             {label ? (
               <div className="hidden px-3 pt-3.5 pb-1.5 text-[11px] font-semibold tracking-[0.09em] text-muted-foreground uppercase lg:block">
@@ -90,13 +91,13 @@ export function SettingsRail({
               const Icon = meta.icon;
               const isActive = s === active;
               const msgKey = `sections.${SECTION_MESSAGE_KEY[s]}` as const;
-              const label = t.has(msgKey) ? t(msgKey) : meta.label;
+              const sectionLabel = t.has(msgKey) ? t(msgKey) : meta.label;
               return (
-                <button
+                <Link
                   key={s}
+                  href={`/settings?tab=${s}`}
+                  scroll={false}
                   ref={isActive ? activeRef : undefined}
-                  type="button"
-                  onClick={() => onSelect(s)}
                   aria-current={isActive ? 'page' : undefined}
                   className={cn(
                     'flex shrink-0 items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium whitespace-nowrap transition-colors',
@@ -107,7 +108,7 @@ export function SettingsRail({
                   )}
                 >
                   <Icon className="size-4 shrink-0" />
-                  <span className="flex-1">{label}</span>
+                  <span className="flex-1">{sectionLabel}</span>
                   {hints?.[s] != null ? (
                     <span
                       className={cn(
@@ -118,7 +119,7 @@ export function SettingsRail({
                       {hints[s]}
                     </span>
                   ) : null}
-                </button>
+                </Link>
               );
             })}
           </div>

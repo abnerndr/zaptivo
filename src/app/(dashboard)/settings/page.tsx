@@ -1,8 +1,9 @@
 'use client';
 
-import { useMemo, type ReactNode } from 'react';
+import { Suspense, useMemo, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { Loader2 } from 'lucide-react';
 
 import { useAuth } from '@/hooks/use-auth';
 import { useTheme } from '@/hooks/use-theme';
@@ -24,28 +25,56 @@ import {
   type SettingsSection,
 } from '@/components/settings/settings-sections';
 
-export default function SettingsPage() {
+function SettingsPanel({
+  section,
+  onSelect,
+}: {
+  section: SettingsSection;
+  onSelect: (next: SettingsSection) => void;
+}) {
+  switch (section) {
+    case 'overview':
+      return <SettingsOverview onSelect={onSelect} />;
+    case 'profile':
+      return <ProfileForm />;
+    case 'security':
+      return <SecurityPanel />;
+    case 'appearance':
+      return <AppearancePanel />;
+    case 'whatsapp':
+      return <WhatsAppConfig />;
+    case 'templates':
+      return <TemplateManager />;
+    case 'quick-replies':
+      return <QuickRepliesManager />;
+    case 'fields':
+      return <FieldsAndTagsPanel />;
+    case 'deals':
+      return <DealsSettings />;
+    case 'members':
+      return <MembersTab />;
+    case 'roles':
+      return <RolesTab />;
+    case 'api':
+      return <ApiKeysSettings />;
+    default:
+      return <SettingsOverview onSelect={onSelect} />;
+  }
+}
+
+function SettingsPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { defaultCurrency } = useAuth();
   const { mode } = useTheme();
   const t = useTranslations('Settings');
 
-  // The URL (`?tab=`) is the single source of truth for the active
-  // section — deep-linkable, and it keeps the existing links in the
-  // app sidebar/header working. Legacy tab values (tags, custom-fields)
-  // resolve onto their new home; unknown/empty → the Overview landing.
   const section = resolveSection(searchParams.get('tab'));
 
   const go = (next: SettingsSection) => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('tab', next);
-    router.replace(`/settings?${params.toString()}`, { scroll: false });
+    router.replace(`/settings?tab=${next}`, { scroll: false });
   };
 
-  // Cheap, fetch-free rail hints. The Overview landing carries the
-  // full live status/counts; the rail just surfaces the two that are
-  // already in context.
   const hints: Partial<Record<SettingsSection, ReactNode>> = useMemo(
     () => ({
       appearance: mode.charAt(0).toUpperCase() + mode.slice(1),
@@ -54,38 +83,35 @@ export default function SettingsPage() {
     [mode, defaultCurrency],
   );
 
-  const panel: Record<SettingsSection, ReactNode> = {
-    overview: <SettingsOverview onSelect={go} />,
-    profile: <ProfileForm />,
-    security: <SecurityPanel />,
-    appearance: <AppearancePanel />,
-    whatsapp: <WhatsAppConfig />,
-    templates: <TemplateManager />,
-    'quick-replies': <QuickRepliesManager />,
-    fields: <FieldsAndTagsPanel />,
-    deals: <DealsSettings />,
-    members: <MembersTab />,
-    roles: <RolesTab />,
-    api: <ApiKeysSettings />,
-  };
-
   return (
     <div className="mx-auto w-full max-w-6xl">
       <div className="mb-1">
         <h1 className="text-2xl font-bold tracking-tight text-foreground">
           {t('pageTitle')}
         </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {t('pageDesc')}
-        </p>
+        <p className="mt-1 text-sm text-muted-foreground">{t('pageDesc')}</p>
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
-        <SettingsRail active={section} onSelect={go} hints={hints} />
+        <SettingsRail active={section} hints={hints} />
         <div className="min-w-0 rounded-xl border border-border/60 bg-card/30 p-4 sm:p-5">
-          {panel[section]}
+          <SettingsPanel section={section} onSelect={go} />
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-40 items-center justify-center text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" />
+        </div>
+      }
+    >
+      <SettingsPageInner />
+    </Suspense>
   );
 }

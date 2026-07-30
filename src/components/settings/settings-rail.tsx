@@ -67,8 +67,8 @@ export function SettingsRail({
       aria-label="Settings sections"
       className={cn(
         'flex gap-1 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
-        'border-b border-border',
-        'lg:sticky lg:top-0 lg:flex-col lg:overflow-visible lg:border-b-0 lg:pb-0',
+        'rounded-xl border border-border/60 bg-card/30 p-1.5',
+        'lg:sticky lg:top-4 lg:flex-col lg:overflow-visible lg:pb-1.5',
       )}
     >
       {RAIL_GROUPS.map(({ label, group }) => {

@@ -70,8 +70,8 @@ export default function SettingsPage() {
   };
 
   return (
-    <div>
-      <div>
+    <div className="mx-auto w-full max-w-6xl">
+      <div className="mb-1">
         <h1 className="text-2xl font-bold tracking-tight text-foreground">
           {t('pageTitle')}
         </h1>
@@ -80,9 +80,11 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[236px_minmax(0,1fr)] lg:items-start">
+      <div className="mt-6 grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
         <SettingsRail active={section} onSelect={go} hints={hints} />
-        <div className="min-w-0">{panel[section]}</div>
+        <div className="min-w-0 rounded-xl border border-border/60 bg-card/30 p-4 sm:p-5">
+          {panel[section]}
+        </div>
       </div>
     </div>
   );

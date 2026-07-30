@@ -103,8 +103,8 @@ export function DealsSettings() {
               }}
               disabled={!canEdit || saving}
             >
-              <SelectTrigger id="default-currency" className="max-w-sm">
-                <SelectValue />
+              <SelectTrigger id="default-currency" className="w-full max-w-sm">
+                <SelectValue placeholder={currency} />
               </SelectTrigger>
               <SelectContent>
                 {CURRENCIES.map((c) => (

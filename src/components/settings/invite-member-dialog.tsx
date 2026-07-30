@@ -293,7 +293,7 @@ export function InviteMemberDialog({
                   onValueChange={(v) => v && setOrgRoleId(v)}
                 >
                   <SelectTrigger className="w-full bg-muted border-border text-foreground">
-                    <SelectValue />
+                    <SelectValue placeholder={t('roleLabel')} />
                   </SelectTrigger>
                   <SelectContent>
                     {roles.map((r) => (
@@ -312,7 +312,7 @@ export function InviteMemberDialog({
                   onValueChange={(v) => v && setExpiry(v)}
                 >
                   <SelectTrigger className="w-full bg-muted border-border text-foreground">
-                    <SelectValue />
+                    <SelectValue placeholder={t('validForLabel')} />
                   </SelectTrigger>
                   <SelectContent>
                     {EXPIRY_OPTIONS.map((opt) => (

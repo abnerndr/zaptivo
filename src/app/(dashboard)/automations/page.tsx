@@ -56,9 +56,27 @@ export default function AutomationsPage() {
     })
     if (!res.ok) {
       const data = (await res.json().catch(() => ({}))) as {
-        errors?: Array<{ message: string }>
+        errors?: Array<{ path?: string; message: string }>
       }
-      toast.error(data.errors?.[0]?.message ?? 'Não foi possível ativar')
+      const first = data.errors?.[0]
+      const detail = first
+        ? first.path
+          ? `${first.message} (${first.path})`
+          : first.message
+        : 'Não foi possível ativar'
+      toast.error(detail, {
+        description:
+          first?.message === 'tag is required'
+            ? 'Abra Editar, escolha ou crie a tag no step e salve.'
+            : undefined,
+        action:
+          first?.message === 'tag is required'
+            ? {
+                label: 'Editar',
+                onClick: () => router.push(`/automations/${row.id}/edit`),
+              }
+            : undefined,
+      })
       return
     }
     void load()

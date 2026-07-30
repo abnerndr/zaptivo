@@ -7,11 +7,28 @@ import { Loader2, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { TagSelectField } from '@/components/automations/tag-select-field'
 
 type Step = {
   step_type: string
   step_config: Record<string, unknown>
   position?: number
+}
+
+const STEP_LABELS: Record<string, string> = {
+  send_message: 'Enviar mensagem',
+  add_tag: 'Adicionar tag',
+  remove_tag: 'Remover tag',
+  wait: 'Aguardar',
+  assign_conversation: 'Atribuir conversa',
+  condition: 'Condição',
+  send_template: 'Enviar template',
+  create_deal: 'Criar deal',
+  update_contact_field: 'Atualizar campo',
+  send_webhook: 'Webhook',
+  close_conversation: 'Fechar conversa',
+  send_buttons: 'Botões',
+  send_list: 'Lista',
 }
 
 export default function EditAutomationPage() {
@@ -22,6 +39,7 @@ export default function EditAutomationPage() {
   const [name, setName] = useState('')
   const [triggerType, setTriggerType] = useState('')
   const [keywords, setKeywords] = useState('')
+  const [triggerTagId, setTriggerTagId] = useState('')
   const [isActive, setIsActive] = useState(false)
   const [steps, setSteps] = useState<Step[]>([])
 
@@ -45,6 +63,11 @@ export default function EditAutomationPage() {
       setIsActive(a.is_active)
       const k = a.trigger_config?.keywords
       setKeywords(Array.isArray(k) ? (k as string[]).join(', ') : '')
+      setTriggerTagId(
+        typeof a.trigger_config?.tag_id === 'string'
+          ? a.trigger_config.tag_id
+          : '',
+      )
       setSteps(
         (a.steps ?? []).map((s) => ({
           step_type: s.step_type,
@@ -62,19 +85,32 @@ export default function EditAutomationPage() {
     void load()
   }, [load])
 
+  const updateStepConfig = (index: number, patch: Record<string, unknown>) => {
+    setSteps((prev) =>
+      prev.map((x, j) =>
+        j === index
+          ? { ...x, step_config: { ...x.step_config, ...patch } }
+          : x,
+      ),
+    )
+  }
+
   const save = async () => {
     setSaving(true)
     try {
-      const trigger_config =
-        triggerType === 'keyword_match'
-          ? {
-              keywords: keywords
-                .split(',')
-                .map((k) => k.trim())
-                .filter(Boolean),
-              match_type: 'contains',
-            }
-          : {}
+      let trigger_config: Record<string, unknown> = {}
+      if (triggerType === 'keyword_match') {
+        trigger_config = {
+          keywords: keywords
+            .split(',')
+            .map((k) => k.trim())
+            .filter(Boolean),
+          match_type: 'contains',
+        }
+      } else if (triggerType === 'tag_added') {
+        trigger_config = { tag_id: triggerTagId }
+      }
+
       const res = await fetch(`/api/automations/${params.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -88,9 +124,16 @@ export default function EditAutomationPage() {
       })
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as {
-          errors?: Array<{ message: string }>
+          errors?: Array<{ path?: string; message: string }>
+          error?: string
         }
-        throw new Error(data.errors?.[0]?.message ?? 'Falha ao salvar')
+        const first = data.errors?.[0]
+        const msg = first
+          ? first.path
+            ? `${first.message} (${first.path})`
+            : first.message
+          : (data.error ?? 'Falha ao salvar')
+        throw new Error(msg)
       }
       toast.success('Salvo')
       router.push('/automations')
@@ -119,7 +162,7 @@ export default function EditAutomationPage() {
       <div className="space-y-1.5">
         <Label>Trigger</Label>
         <select
-          className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+          className="h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm text-foreground"
           value={triggerType}
           onChange={(e) => setTriggerType(e.target.value)}
         >
@@ -127,6 +170,7 @@ export default function EditAutomationPage() {
           <option value="new_message_received">Nova mensagem</option>
           <option value="keyword_match">Keyword</option>
           <option value="new_contact_created">Novo contato</option>
+          <option value="tag_added">Tag adicionada</option>
         </select>
       </div>
       {triggerType === 'keyword_match' ? (
@@ -138,6 +182,13 @@ export default function EditAutomationPage() {
           />
         </div>
       ) : null}
+      {triggerType === 'tag_added' ? (
+        <TagSelectField
+          label="Tag do trigger"
+          value={triggerTagId}
+          onChange={setTriggerTagId}
+        />
+      ) : null}
       <label className="flex items-center gap-2 text-sm">
         <input
           type="checkbox"
@@ -146,51 +197,125 @@ export default function EditAutomationPage() {
         />
         Ativa
       </label>
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <Label>Steps (send_message)</Label>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() =>
-              setSteps((prev) => [
-                ...prev,
-                { step_type: 'send_message', step_config: { text: '' } },
-              ])
-            }
-          >
-            <Plus className="size-3.5" />
-            Step
-          </Button>
-        </div>
-        {steps.map((s, i) => (
-          <div key={i} className="flex gap-2">
-            <Input
-              value={String(s.step_config.text ?? '')}
-              onChange={(e) =>
-                setSteps((prev) =>
-                  prev.map((x, j) =>
-                    j === i
-                      ? {
-                          ...x,
-                          step_config: { ...x.step_config, text: e.target.value },
-                        }
-                      : x,
-                  ),
-                )
-              }
-              placeholder="Texto da mensagem"
-            />
+      {isActive ? (
+        <p className="text-xs text-muted-foreground">
+          Para ativar, steps como “Adicionar tag” precisam de uma tag
+          selecionada.
+        </p>
+      ) : null}
+
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Label>Steps</Label>
+          <div className="flex gap-1">
             <Button
-              size="icon-sm"
-              variant="ghost"
-              onClick={() => setSteps((prev) => prev.filter((_, j) => j !== i))}
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                setSteps((prev) => [
+                  ...prev,
+                  { step_type: 'send_message', step_config: { text: '' } },
+                ])
+              }
             >
-              <Trash2 className="size-3.5" />
+              <Plus className="size-3.5" />
+              Mensagem
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                setSteps((prev) => [
+                  ...prev,
+                  { step_type: 'add_tag', step_config: { tag_id: '' } },
+                ])
+              }
+            >
+              <Plus className="size-3.5" />
+              Tag
             </Button>
           </div>
-        ))}
+        </div>
+
+        {steps.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Nenhum step.</p>
+        ) : (
+          steps.map((s, i) => (
+            <div
+              key={i}
+              className="space-y-2 rounded-lg border border-border p-3"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-medium">
+                  {i + 1}. {STEP_LABELS[s.step_type] ?? s.step_type}
+                </span>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  onClick={() =>
+                    setSteps((prev) => prev.filter((_, j) => j !== i))
+                  }
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </div>
+
+              {s.step_type === 'send_message' ? (
+                <Input
+                  value={String(s.step_config.text ?? '')}
+                  onChange={(e) =>
+                    updateStepConfig(i, { text: e.target.value })
+                  }
+                  placeholder="Texto da mensagem"
+                />
+              ) : null}
+
+              {s.step_type === 'add_tag' || s.step_type === 'remove_tag' ? (
+                <TagSelectField
+                  value={String(s.step_config.tag_id ?? '')}
+                  onChange={(tagId) => updateStepConfig(i, { tag_id: tagId })}
+                />
+              ) : null}
+
+              {s.step_type === 'wait' ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    type="number"
+                    min={1}
+                    value={Number(s.step_config.amount ?? 1)}
+                    onChange={(e) =>
+                      updateStepConfig(i, {
+                        amount: Number(e.target.value) || 1,
+                      })
+                    }
+                  />
+                  <select
+                    className="h-9 rounded-lg border border-input bg-background px-2.5 text-sm text-foreground"
+                    value={String(s.step_config.unit ?? 'minutes')}
+                    onChange={(e) =>
+                      updateStepConfig(i, { unit: e.target.value })
+                    }
+                  >
+                    <option value="minutes">minutos</option>
+                    <option value="hours">horas</option>
+                    <option value="days">dias</option>
+                  </select>
+                </div>
+              ) : null}
+
+              {!['send_message', 'add_tag', 'remove_tag', 'wait'].includes(
+                s.step_type,
+              ) ? (
+                <p className="text-xs text-muted-foreground">
+                  Configuração avançada deste step ainda não está no editor
+                  enxuto. Remova o step ou complete via API se necessário.
+                </p>
+              ) : null}
+            </div>
+          ))
+        )}
       </div>
+
       <div className="flex gap-2">
         <Button variant="outline" onClick={() => router.push('/automations')}>
           Cancelar

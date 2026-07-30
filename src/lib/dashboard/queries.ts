@@ -61,7 +61,7 @@ export async function getDashboardMetrics(
     }),
     prisma.deal.findMany({
       where: {
-        status: 'active',
+        status: 'open',
         pipeline: { accountId },
       },
       select: { value: true },
@@ -162,7 +162,7 @@ export async function getPipelineDonut(
         orderBy: { position: 'asc' },
         include: {
           deals: {
-            where: { status: 'active' },
+            where: { status: 'open' },
             select: { value: true },
           },
         },

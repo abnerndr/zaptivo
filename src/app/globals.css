@@ -227,4 +227,13 @@ html[data-theme="rose"] {
   html {
     @apply font-sans;
   }
+  /* Native <select>/<option> inherit theme text but OS dropdown
+   * panels often stay white — force readable contrast. */
+  select {
+    @apply bg-background text-foreground;
+  }
+  select option {
+    background-color: var(--background);
+    color: var(--foreground);
+  }
 }

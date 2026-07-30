@@ -93,7 +93,7 @@ export async function POST(req: Request) {
         expectedCloseDate: body.expected_close_date
           ? new Date(body.expected_close_date)
           : null,
-        status: 'active',
+        status: 'open',
       },
       include: { contact: true },
     })

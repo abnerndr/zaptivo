@@ -488,7 +488,7 @@ model Deal {
   currency          String    @default("USD")
   notes             String?
   expectedCloseDate DateTime? @map("expected_close_date") @db.Date
-  status            String    @default("active")
+  status            String    @default("open") // open | won | lost
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
 

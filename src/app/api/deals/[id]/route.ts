@@ -34,7 +34,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
       currency?: string
       notes?: string | null
       expected_close_date?: string | null
-      status?: 'active' | 'won' | 'lost'
+      status?: 'open' | 'won' | 'lost' | 'active'
       contact_id?: string
     }
     if (body.stage_id) {
@@ -53,6 +53,9 @@ export async function PATCH(req: Request, ctx: Ctx) {
         return NextResponse.json({ error: 'Contact not found' }, { status: 404 })
       }
     }
+    const status =
+      body.status === 'active' ? 'open' : body.status
+
     const deal = await prisma.deal.update({
       where: { id },
       data: {
@@ -61,7 +64,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
         ...(body.value !== undefined ? { value: body.value } : {}),
         ...(body.currency !== undefined ? { currency: body.currency } : {}),
         ...(body.notes !== undefined ? { notes: body.notes } : {}),
-        ...(body.status !== undefined ? { status: body.status } : {}),
+        ...(status !== undefined ? { status } : {}),
         ...(body.contact_id ? { contactId: body.contact_id } : {}),
         ...(body.expected_close_date !== undefined
           ? {

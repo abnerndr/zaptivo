@@ -33,7 +33,10 @@ export function serializeDeal(d: DealRow) {
     expected_close_date: d.expectedCloseDate
       ? d.expectedCloseDate.toISOString().slice(0, 10)
       : undefined,
-    status: d.status as 'active' | 'won' | 'lost',
+    status: (d.status === 'active' ? 'open' : d.status) as
+      | 'open'
+      | 'won'
+      | 'lost',
     created_at: d.createdAt.toISOString(),
     updated_at: d.updatedAt.toISOString(),
     contact: d.contact

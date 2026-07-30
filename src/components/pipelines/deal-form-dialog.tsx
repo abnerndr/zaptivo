@@ -1,8 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { Loader2 } from 'lucide-react'
+import { Check, Loader2 } from 'lucide-react'
 import type { Deal } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { CURRENCIES } from '@/lib/currency'
 
 type ContactOption = {
   id: string
@@ -28,6 +29,11 @@ type Props = {
   stageId: string | null
   deal?: Deal | null
   onSaved: () => void
+}
+
+function contactLabel(c: ContactOption) {
+  if (c.name?.trim()) return `${c.name.trim()} — ${c.phone}`
+  return c.phone
 }
 
 export function DealFormDialog({
@@ -49,6 +55,15 @@ export function DealFormDialog({
   const [saving, setSaving] = useState(false)
   const [loadingContacts, setLoadingContacts] = useState(false)
 
+  const seedContact = useMemo<ContactOption | null>(() => {
+    if (!deal?.contact_id) return null
+    return {
+      id: deal.contact_id,
+      name: deal.contact?.name ?? null,
+      phone: deal.contact?.phone ?? '',
+    }
+  }, [deal])
+
   useEffect(() => {
     if (!open) return
     setTitle(deal?.title ?? '')
@@ -59,26 +74,38 @@ export function DealFormDialog({
     setContactQ('')
   }, [open, deal])
 
-  const loadContacts = useCallback(async (q: string) => {
-    setLoadingContacts(true)
-    try {
-      const qs = new URLSearchParams({ pageSize: '20', ...(q ? { q } : {}) })
-      const res = await fetch(`/api/contacts?${qs}`)
-      if (!res.ok) throw new Error('Falha ao buscar contatos')
-      const data = (await res.json()) as { contacts: ContactOption[] }
-      setContacts(data.contacts)
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro')
-    } finally {
-      setLoadingContacts(false)
-    }
-  }, [])
+  const loadContacts = useCallback(
+    async (q: string) => {
+      setLoadingContacts(true)
+      try {
+        const qs = new URLSearchParams({ pageSize: '50', ...(q ? { q } : {}) })
+        const res = await fetch(`/api/contacts?${qs}`)
+        if (!res.ok) throw new Error('Falha ao buscar contatos')
+        const data = (await res.json()) as { contacts: ContactOption[] }
+        const rows = data.contacts ?? []
+        // Keep the deal's current contact in the options even if the
+        // search page wouldn't include it.
+        if (seedContact && !rows.some((c) => c.id === seedContact.id)) {
+          setContacts([seedContact, ...rows])
+        } else {
+          setContacts(rows)
+        }
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Erro')
+      } finally {
+        setLoadingContacts(false)
+      }
+    },
+    [seedContact],
+  )
 
   useEffect(() => {
     if (!open) return
     const t = setTimeout(() => void loadContacts(contactQ), 200)
     return () => clearTimeout(t)
   }, [open, contactQ, loadContacts])
+
+  const selected = contacts.find((c) => c.id === contactId) ?? seedContact
 
   const save = async () => {
     if (!title.trim()) {
@@ -138,7 +165,7 @@ export function DealFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-popover border-border sm:max-w-md">
+      <DialogContent className="z-100 bg-popover border-border sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{editing ? 'Editar deal' : 'Novo deal'}</DialogTitle>
         </DialogHeader>
@@ -163,11 +190,18 @@ export function DealFormDialog({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="deal-currency">Moeda</Label>
-              <Input
+              <select
                 id="deal-currency"
+                className="flex h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                 value={currency}
-                onChange={(e) => setCurrency(e.target.value.toUpperCase())}
-              />
+                onChange={(e) => setCurrency(e.target.value)}
+              >
+                {CURRENCIES.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.symbol} {c.code}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
           <div className="space-y-1.5">
@@ -177,37 +211,35 @@ export function DealFormDialog({
               placeholder="Buscar nome ou telefone"
               value={contactQ}
               onChange={(e) => setContactQ(e.target.value)}
+              autoComplete="off"
             />
-            <div className="max-h-36 overflow-y-auto rounded-md border border-border">
-              {loadingContacts ? (
-                <div className="flex items-center gap-2 p-2 text-sm text-muted-foreground">
-                  <Loader2 className="size-3.5 animate-spin" />
-                  Buscando…
-                </div>
-              ) : contacts.length === 0 ? (
-                <p className="p-2 text-sm text-muted-foreground">
-                  Nenhum contato
-                </p>
-              ) : (
-                contacts.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => setContactId(c.id)}
-                    className={`flex w-full flex-col px-2 py-1.5 text-left text-sm hover:bg-muted ${
-                      contactId === c.id ? 'bg-muted' : ''
-                    }`}
-                  >
-                    <span>{c.name || c.phone}</span>
-                    {c.name ? (
-                      <span className="text-xs text-muted-foreground">
-                        {c.phone}
-                      </span>
-                    ) : null}
-                  </button>
-                ))
-              )}
-            </div>
+            <select
+              id="deal-contact"
+              className="flex h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+              value={contactId}
+              disabled={loadingContacts && contacts.length === 0}
+              onChange={(e) => setContactId(e.target.value)}
+            >
+              <option value="">
+                {loadingContacts ? 'Carregando…' : 'Selecione um contato…'}
+              </option>
+              {contacts.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {contactLabel(c)}
+                </option>
+              ))}
+            </select>
+            {selected && contactId ? (
+              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Check className="size-3.5 text-primary" />
+                Selecionado: {contactLabel(selected)}
+              </p>
+            ) : null}
+            {!loadingContacts && contacts.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Nenhum contato encontrado. Ajuste a busca.
+              </p>
+            ) : null}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="deal-notes">Notas</Label>

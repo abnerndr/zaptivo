@@ -225,7 +225,8 @@ export default function PipelinesPage() {
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-xl font-semibold">Pipelines</h1>
         <select
-          className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+          aria-label="Pipeline ativo"
+          className="h-9 min-w-[12rem] rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
           value={active.id}
           onChange={(e) => setPipelineId(e.target.value)}
         >

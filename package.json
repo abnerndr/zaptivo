@@ -29,11 +29,11 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
+    "build": "prisma generate && NODE_OPTIONS='--max-old-space-size=8192' next build",
     "start": "next start",
     "start:dokploy": "prisma migrate deploy && next start -H 0.0.0.0 -p ${PORT:-3000}",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "NODE_OPTIONS='--max-old-space-size=8192' tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",

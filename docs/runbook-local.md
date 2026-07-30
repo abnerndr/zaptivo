@@ -41,8 +41,9 @@ Seed (idempotente): `SEED_ADMIN_CPF` (default `52998224725`), `SEED_ADMIN_PASSWO
 | SSE realtime | Pronto |
 | send-message → WAHA | Pronto |
 | Templates locais API | Pronto (sync Meta = 410) |
-| Pipelines / Broadcasts / Automations / Flows / AI UIs | **Shell “em migração”** — APIs em stub Prisma |
-| Engines flows/automations/AI | Stubs — reimplementar sobre Prisma |
+| Pipelines / Broadcasts / Automations UIs | **CRUD operacional** (Prisma session APIs) |
+| Flows UI + engine MVP | **Keyword / first_inbound → send_message** via WAHA; cron com `AUTOMATION_CRON_SECRET` |
+| Automations / Broadcasts engines | Stubs — envio em massa e `runAutomationsForTrigger` ainda não ligados |
 | Public API `/api/v1` | Shell autenticado — expandir queries |
 | Pacotes `@supabase/*` | Removidos |
 

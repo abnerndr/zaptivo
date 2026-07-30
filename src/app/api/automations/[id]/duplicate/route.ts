@@ -1,28 +1,50 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db/prisma";
-import { requireSessionAccount } from "@/lib/auth/context";
+import { NextResponse } from 'next/server'
+import { Prisma } from '@prisma/client'
+import { prisma } from '@/lib/db/prisma'
+import { requireSessionAccount } from '@/lib/auth/context'
+import { serializeAutomation } from '@/lib/automations/serialize'
 
-/**
- * Migrated stub — src/app/api/automations/[id]/duplicate/route.ts
- * Full behaviour may need follow-up; auth + account scoping via Prisma.
- */
-export async function GET() {
-  try {
-    const ctx = await requireSessionAccount();
-    return NextResponse.json({ ok: true, accountId: ctx.accountId, notice: "endpoint migrated to Prisma shell — expand as needed" });
-  } catch (err) {
-    if (err instanceof Response) return err;
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
-  }
-}
+type Ctx = { params: Promise<{ id: string }> }
 
-export async function POST(req: Request) {
+export async function POST(_req: Request, ctx: Ctx) {
   try {
-    const ctx = await requireSessionAccount();
-    const body = await req.json().catch(() => ({}));
-    return NextResponse.json({ ok: true, accountId: ctx.accountId, received: body });
+    const session = await requireSessionAccount()
+    const { id } = await ctx.params
+    const existing = await prisma.automation.findFirst({
+      where: { id, accountId: session.accountId },
+      include: { steps: true },
+    })
+    if (!existing) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
+    const clone = await prisma.automation.create({
+      data: {
+        accountId: session.accountId,
+        userId: session.userId,
+        name: `${existing.name} (copy)`,
+        description: existing.description,
+        triggerType: existing.triggerType,
+        triggerConfig: existing.triggerConfig as Prisma.InputJsonValue,
+        isActive: false,
+        steps: {
+          create: existing.steps
+            .filter((s) => !s.parentStepId)
+            .sort((a, b) => a.position - b.position)
+            .map((s, i) => ({
+              stepType: s.stepType,
+              stepConfig: s.stepConfig as Prisma.InputJsonValue,
+              position: i,
+            })),
+        },
+      },
+      include: { steps: true },
+    })
+    return NextResponse.json(
+      { automation: serializeAutomation(clone) },
+      { status: 201 },
+    )
   } catch (err) {
-    if (err instanceof Response) return err;
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    if (err instanceof Response) return err
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

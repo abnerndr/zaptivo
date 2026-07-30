@@ -17,6 +17,7 @@ import {
 } from '@/lib/whatsapp/resolve-lid'
 import { pickContactJid, pickLidJid } from '@/lib/whatsapp/inbound-jid'
 import { ensureContactAvatar } from '@/lib/whatsapp/ensure-contact-avatar'
+import { dispatchInboundToFlows } from '@/lib/flows/engine'
 
 export { pickContactJid, pickLidJid } from '@/lib/whatsapp/inbound-jid'
 
@@ -412,6 +413,24 @@ export async function ingestWahaMessage(args: {
     id: conversationId,
     accountId,
   }).catch(() => {})
+
+  if (!fromMe && text?.trim()) {
+    const priorCustomer = await prisma.message.count({
+      where: {
+        conversation: { contactId, accountId },
+        senderType: 'customer',
+        id: { not: message.id },
+      },
+    })
+    void dispatchInboundToFlows({
+      accountId,
+      contactId,
+      conversationId,
+      phone,
+      text: text.trim(),
+      isFirstInbound: priorCustomer === 0,
+    }).catch((err) => console.error('[flows dispatch]', err))
+  }
 
   return { ok: true, conversationId }
 }

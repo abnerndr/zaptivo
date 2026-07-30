@@ -11,7 +11,7 @@ import {
   UsersRound,
   Zap,
   type LucideIcon,
-} from 'lucide-react';
+} from 'lucide-react'
 
 /**
  * Settings information architecture for the redesigned page.
@@ -32,6 +32,7 @@ export const SETTINGS_SECTIONS = [
   'fields',
   'deals',
   'members',
+  'roles',
   'api',
 ] as const;
 
@@ -58,6 +59,7 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   fields: { id: 'fields', label: 'Fields & tags', icon: Tags, group: 'workspace' },
   deals: { id: 'deals', label: 'Deals & currency', icon: Coins, group: 'workspace' },
   members: { id: 'members', label: 'Team members', icon: UsersRound, group: 'workspace' },
+  roles: { id: 'roles', label: 'Roles & permissions', icon: Shield, group: 'workspace' },
   api: { id: 'api', label: 'API keys', icon: KeyRound, group: 'workspace' },
 };
 

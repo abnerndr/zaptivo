@@ -18,7 +18,9 @@ export async function GET() {
         email: true,
         avatarUrl: true,
         accountRole: true,
+        orgRoleId: true,
         createdAt: true,
+        orgRole: { select: { id: true, name: true, systemKey: true } },
       },
     })
 
@@ -28,6 +30,8 @@ export async function GET() {
       email: p.email,
       avatar_url: p.avatarUrl,
       role: p.accountRole,
+      org_role_id: p.orgRoleId,
+      org_role_name: p.orgRole?.name ?? null,
       joined_at: p.createdAt.toISOString(),
     }))
 

@@ -23,6 +23,7 @@ const SECTION_MESSAGE_KEY: Record<SettingsSection, string> = {
   fields: 'fields',
   deals: 'deals',
   members: 'members',
+  roles: 'roles',
   api: 'api',
 };
 

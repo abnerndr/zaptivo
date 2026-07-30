@@ -1,29 +1,25 @@
 // ============================================================
 // Account role helpers — pure, unit-testable, no I/O.
 //
-// Mirrors the `account_role_enum` Postgres type from migration
-// 017_account_sharing.sql. The hierarchy is intentionally a flat
-// ordinal (owner=4 … viewer=1) — it matches the same CASE
-// expression the `is_account_member(account_id, min_role)` SQL
-// helper uses, so server-side TypeScript guards and database-side
-// RLS speak the same language.
-//
-// Predicates (`canManageMembers`, `canEditSettings`, …) are the
-// single source of truth for "what can this role do?" — both
-// API route guards and UI gates should call them rather than
-// open-coding their own role checks. That keeps role-policy
-// changes a one-file diff.
+// Predicates prefer OrgRole permission sets when provided, and
+// fall back to the legacy AccountRole enum mapping so existing
+// call sites that pass only a role string keep working.
 // ============================================================
 
-export type AccountRole = "owner" | "admin" | "agent" | "viewer";
+import {
+  SYSTEM_ROLE_PERMISSIONS,
+  type PermissionKey,
+} from '@/lib/auth/permission-catalog'
+
+export type AccountRole = 'owner' | 'admin' | 'agent' | 'viewer'
 
 /** Ordered list of every valid role, lowest privilege first. */
 export const ACCOUNT_ROLES: readonly AccountRole[] = [
-  "viewer",
-  "agent",
-  "admin",
-  "owner",
-] as const;
+  'viewer',
+  'agent',
+  'admin',
+  'owner',
+] as const
 
 /**
  * Numeric rank of a role. Higher = more privileged. Mirrors the
@@ -31,14 +27,14 @@ export const ACCOUNT_ROLES: readonly AccountRole[] = [
  */
 export function roleRank(role: AccountRole): number {
   switch (role) {
-    case "owner":
-      return 4;
-    case "admin":
-      return 3;
-    case "agent":
-      return 2;
-    case "viewer":
-      return 1;
+    case 'owner':
+      return 4
+    case 'admin':
+      return 3
+    case 'agent':
+      return 2
+    case 'viewer':
+      return 1
   }
 }
 
@@ -47,63 +43,85 @@ export function roleRank(role: AccountRole): number {
  * for any "user has at least admin" / "at least agent" checks.
  */
 export function hasMinRole(role: AccountRole, min: AccountRole): boolean {
-  return roleRank(role) >= roleRank(min);
+  return roleRank(role) >= roleRank(min)
 }
 
 /** Type-narrow an unknown string into a valid `AccountRole`. */
 export function isAccountRole(value: unknown): value is AccountRole {
   return (
-    typeof value === "string" &&
+    typeof value === 'string' &&
     (ACCOUNT_ROLES as readonly string[]).includes(value)
-  );
+  )
 }
 
-// ============================================================
-// Capability predicates
-//
-// Every UI gate and API route guard should call one of these
-// instead of comparing role strings inline. Adding a capability
-// = one new predicate here + one call site change per consumer.
-// ============================================================
+export type RoleCapabilityContext = {
+  accountRole: AccountRole
+  /** Permission keys from the member's OrgRole (if loaded). */
+  permissions?: ReadonlySet<string> | readonly string[] | null
+}
 
-/** Owner / admin: invite, remove, change roles. */
-export function canManageMembers(role: AccountRole): boolean {
-  return hasMinRole(role, "admin");
+function hasPermission(
+  ctx: RoleCapabilityContext | AccountRole,
+  key: PermissionKey,
+): boolean {
+  if (typeof ctx === 'string') {
+    if (ctx === 'owner') return true
+    return SYSTEM_ROLE_PERMISSIONS[ctx].includes(key)
+  }
+  if (ctx.accountRole === 'owner') return true
+  const set =
+    ctx.permissions instanceof Set
+      ? ctx.permissions
+      : new Set(ctx.permissions ?? [])
+  if (set.size > 0) return set.has(key)
+  return SYSTEM_ROLE_PERMISSIONS[ctx.accountRole].includes(key)
+}
+
+/** Owner / admin (or members.manage): invite, remove, change roles. */
+export function canManageMembers(
+  roleOrCtx: AccountRole | RoleCapabilityContext,
+): boolean {
+  return hasPermission(roleOrCtx, 'members.manage')
 }
 
 /**
- * Owner / admin: edit account-wide settings (WhatsApp config,
- * message templates, pipelines, tags, custom fields, account
- * name). Excludes per-user settings like avatar or own password.
+ * Owner / admin (or settings.edit): edit account-wide settings.
  */
-export function canEditSettings(role: AccountRole): boolean {
-  return hasMinRole(role, "admin");
+export function canEditSettings(
+  roleOrCtx: AccountRole | RoleCapabilityContext,
+): boolean {
+  return hasPermission(roleOrCtx, 'settings.edit')
+}
+
+/** Owner / admin (or roles.manage): create/edit custom OrgRoles. */
+export function canManageRoles(
+  roleOrCtx: AccountRole | RoleCapabilityContext,
+): boolean {
+  return hasPermission(roleOrCtx, 'roles.manage')
 }
 
 /**
- * Owner / admin / agent: write operational data — send messages,
- * create contacts, move deals, run broadcasts, edit automations.
- * Viewers are read-only.
+ * Owner / admin / agent (or inbox.send): write operational data.
  */
-export function canSendMessages(role: AccountRole): boolean {
-  return hasMinRole(role, "agent");
+export function canSendMessages(
+  roleOrCtx: AccountRole | RoleCapabilityContext,
+): boolean {
+  return hasPermission(roleOrCtx, 'inbox.send')
 }
 
 /**
- * Viewer: read-only across everything. Provided as a positive
- * predicate so UI gates read naturally (`if (canViewOnly(role))`
- * shows the "Read-only" tooltip without inverting `canSendMessages`).
+ * Viewer: read-only across everything.
  */
 export function canViewOnly(role: AccountRole): boolean {
-  return role === "viewer";
+  return role === 'viewer'
 }
 
 /** Owner only: irreversible destructive operations. */
 export function canDeleteAccount(role: AccountRole): boolean {
-  return role === "owner";
+  return role === 'owner'
 }
 
 /** Owner only: hand the account to another member. */
 export function canTransferOwnership(role: AccountRole): boolean {
-  return role === "owner";
+  return role === 'owner'
 }

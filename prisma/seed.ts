@@ -19,6 +19,7 @@ import { PrismaPg } from '@prisma/adapter-pg'
 import { Pool } from 'pg'
 import { normalizeCpf, isValidCpf } from '../src/lib/auth/cpf'
 import { hashPassword } from '../src/lib/auth/password'
+import { ensureSystemOrgRoles } from '../src/lib/auth/org-roles'
 
 function requireEnv(name: string, fallback?: string): string {
   const value = process.env[name]?.trim() || fallback
@@ -81,11 +82,15 @@ async function main() {
               accountRole: 'owner',
             },
           })
+          await ensureSystemOrgRoles(existing.profile.accountId)
         }
         console.log(`Admin atualizado (reset senha): CPF ${cpf}`)
         return
       }
 
+      if (existing.profile) {
+        await ensureSystemOrgRoles(existing.profile.accountId)
+      }
       console.log(
         `Admin já existe (CPF ${cpf}). Nada a fazer. SEED_ADMIN_RESET=1 para resetar senha.`,
       )
@@ -131,6 +136,8 @@ async function main() {
 
       return { userId: user.id, tenantId: tenant.id }
     })
+
+    await ensureSystemOrgRoles(result.tenantId)
 
     console.log('Admin criado com role owner:')
     console.log(`  CPF:    ${cpf}`)

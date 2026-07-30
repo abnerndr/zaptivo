@@ -28,6 +28,7 @@ import {
   Loader2,
   Mail,
   MailX,
+  Pencil,
   Plus,
   Trash2,
   UsersRound,
@@ -55,6 +56,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -82,23 +85,26 @@ interface Member {
   email: string | null;
   avatar_url: string | null;
   role: AccountRole;
+  org_role_id?: string | null;
+  org_role_name?: string | null;
   joined_at: string;
 }
 
 interface Invitation {
   id: string;
   role: 'admin' | 'agent' | 'viewer';
+  org_role_name?: string | null;
+  email?: string | null;
   label: string | null;
   created_at: string;
   expires_at: string;
 }
 
-// These roles are translated via `useTranslations("Settings.roles")` where they are used.
-const EDITABLE_ROLES: { value: AccountRole }[] = [
-  { value: 'admin' },
-  { value: 'agent' },
-  { value: 'viewer' },
-];
+type OrgRoleOption = {
+  id: string;
+  name: string;
+  system_key: string | null;
+};
 
 // Per-role chip metadata (icon / label / colour) lives in the shared
 // ROLE_META module so this roster and the Overview identity chip can't
@@ -136,22 +142,30 @@ export function MembersTab() {
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [removingMember, setRemovingMember] = useState<Member | null>(null);
+  const [editingMember, setEditingMember] = useState<Member | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editOrgRoleId, setEditOrgRoleId] = useState('');
+  const [orgRoles, setOrgRoles] = useState<OrgRoleOption[]>([]);
   const [pendingMemberAction, setPendingMemberAction] = useState<string | null>(
     null,
   );
 
   const loadEverything = useCallback(async () => {
     try {
-      const [mres, ires] = await Promise.all([
+      const [mres, ires, rres] = await Promise.all([
         fetch('/api/account/members', { cache: 'no-store' }),
         canManageMembers
           ? fetch('/api/account/invitations', { cache: 'no-store' })
+          : Promise.resolve(null),
+        canManageMembers
+          ? fetch('/api/account/roles', { cache: 'no-store' })
           : Promise.resolve(null),
       ]);
 
       if (!mres.ok) {
         const payload = await mres.json().catch(() => ({}));
-        toast.error(payload.error || 'Failed to load members');
+        toast.error(payload.error || t('loadMembersFailed'));
         return;
       }
       const mdata = (await mres.json()) as { members?: Member[] };
@@ -160,7 +174,7 @@ export function MembersTab() {
       if (ires) {
         if (!ires.ok) {
           const payload = await ires.json().catch(() => ({}));
-          toast.error(payload.error || 'Failed to load invitations');
+          toast.error(payload.error || t('loadInvitesFailed'));
           return;
         }
         const idata = (await ires.json()) as { invitations?: Invitation[] };
@@ -168,61 +182,67 @@ export function MembersTab() {
       } else {
         setInvitations([]);
       }
+
+      if (rres?.ok) {
+        const rdata = (await rres.json()) as { roles?: OrgRoleOption[] };
+        setOrgRoles(
+          (rdata.roles ?? []).filter((r) => r.system_key !== 'owner'),
+        );
+      }
     } catch (err) {
       console.error('[MembersTab] load error:', err);
-      toast.error('Could not reach the server');
+      toast.error(t('networkError'));
     } finally {
       setLoading(false);
     }
-  }, [canManageMembers]);
+  }, [canManageMembers, t]);
 
   useEffect(() => {
     void loadEverything();
   }, [loadEverything]);
 
-  async function handleRoleChange(member: Member, nextRole: AccountRole) {
-    if (member.role === nextRole) return;
-    // Optimistic update — flip the dropdown immediately so the UI
-    // feels snappy. If the server PATCH fails we revert below so
-    // the dropdown doesn't lie about the persisted state.
-    const previousRole = member.role;
-    setPendingMemberAction(member.user_id);
-    setMembers((prev) =>
-      prev.map((m) =>
-        m.user_id === member.user_id ? { ...m, role: nextRole } : m,
-      ),
+  function openEdit(member: Member) {
+    setEditingMember(member);
+    setEditName(member.full_name || '');
+    setEditEmail(member.email || '');
+    setEditOrgRoleId(
+      member.org_role_id ||
+        orgRoles.find((r) => r.system_key === member.role)?.id ||
+        '',
     );
+  }
+
+  async function handleSaveEdit() {
+    if (!editingMember) return;
+    const name = editName.trim();
+    if (!name) {
+      toast.error(t('editNameRequired'));
+      return;
+    }
+    setPendingMemberAction(editingMember.user_id);
     try {
-      const res = await fetch(`/api/account/members/${member.user_id}`, {
+      const res = await fetch(`/api/account/members/${editingMember.user_id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: nextRole }),
+        body: JSON.stringify({
+          fullName: name,
+          email: editEmail.trim() || undefined,
+          orgRoleId: editOrgRoleId || undefined,
+        }),
       });
       if (!res.ok) {
-        // Revert the optimistic flip. The toast on its own wasn't
-        // enough — the dropdown was left showing the new role
-        // forever, so the next interaction operated on a wrong
-        // baseline (re-trying the same change would no-op via the
-        // `member.role === nextRole` guard at the top).
-        setMembers((prev) =>
-          prev.map((m) =>
-            m.user_id === member.user_id ? { ...m, role: previousRole } : m,
-          ),
-        );
         const payload = await res.json().catch(() => ({}));
-        toast.error(payload.error || 'Failed to update role');
+        toast.error(payload.error || t('editFailed'));
         return;
       }
-      toast.success(t('updatedToast', { name: member.full_name || t('unnamed'), role: tRoles(nextRole) }));
-    } catch (err) {
-      // Same revert on network failure.
-      setMembers((prev) =>
-        prev.map((m) =>
-          m.user_id === member.user_id ? { ...m, role: previousRole } : m,
-        ),
+      toast.success(
+        t('memberUpdatedToast', { name: name || t('unnamed') }),
       );
-      console.error('[MembersTab] role change error:', err);
-      toast.error('Could not reach the server');
+      setEditingMember(null);
+      await loadEverything();
+    } catch (err) {
+      console.error('[MembersTab] edit error:', err);
+      toast.error(t('networkError'));
     } finally {
       setPendingMemberAction(null);
     }
@@ -238,7 +258,7 @@ export function MembersTab() {
       );
       if (!res.ok) {
         const payload = await res.json().catch(() => ({}));
-        toast.error(payload.error || 'Failed to remove member');
+        toast.error(payload.error || t('removeFailed'));
         return;
       }
       toast.success(t('removedToast', { name: removingMember.full_name || t('unnamed') }));
@@ -248,7 +268,7 @@ export function MembersTab() {
       setRemovingMember(null);
     } catch (err) {
       console.error('[MembersTab] remove error:', err);
-      toast.error('Could not reach the server');
+      toast.error(t('networkError'));
     } finally {
       setPendingMemberAction(null);
     }
@@ -261,14 +281,14 @@ export function MembersTab() {
       });
       if (!res.ok) {
         const payload = await res.json().catch(() => ({}));
-        toast.error(payload.error || 'Failed to revoke invitation');
+        toast.error(payload.error || t('revokeFailed'));
         return;
       }
       toast.success(t('revokedToast'));
       setInvitations((prev) => prev.filter((i) => i.id !== invite.id));
     } catch (err) {
       console.error('[MembersTab] revoke error:', err);
-      toast.error('Could not reach the server');
+      toast.error(t('networkError'));
     }
   }
 
@@ -410,60 +430,35 @@ export function MembersTab() {
                       inline. Items align to the start on mobile so the
                       role dropdown lines up under the avatar. */}
                   <div className="flex items-center gap-2 sm:gap-3">
-                    {/* Role display / editor. Inline Select is admin+
-                        only AND not allowed on the owner row (owner
-                        changes go through transfer, which lands later). */}
-                    {canManageMembers && !isOwnerRow && !isSelf ? (
-                      <Select
-                        value={member.role}
-                        onValueChange={(v) =>
-                          // Base UI Select can emit null on clear. We
-                          // don't expose a clear affordance, so the
-                          // guard is defensive — but the typed
-                          // signature requires it.
-                          v && handleRoleChange(member, v as AccountRole)
-                        }
-                      >
-                        <SelectTrigger
-                          className="w-32 bg-muted border-border text-foreground"
-                          disabled={isBusy}
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {EDITABLE_ROLES.map((r) => (
-                            <SelectItem key={r.value} value={r.value}>
-                              {tRoles(r.value)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <span
-                        className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium ${roleMeta.className}`}
-                      >
-                        <RoleIcon className="size-3.5" />
-                        {tRoles(member.role)}
-                      </span>
-                    )}
+                    <span
+                      className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium ${roleMeta.className}`}
+                    >
+                      <RoleIcon className="size-3.5" />
+                      {member.org_role_name || tRoles(member.role)}
+                    </span>
 
-                    {/* Remove. Admin+ only; never on the owner row;
-                        never on yourself. Pre-polish styling was
-                        neutral-default + red-on-hover — the
-                        destructive intent was invisible until the
-                        user moused over. Now red is the default
-                        state with a darker shade on hover so the
-                        affordance reads at-a-glance. */}
                     {canManageMembers && !isOwnerRow && !isSelf && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setRemovingMember(member)}
-                        disabled={isBusy}
-                        className="border-red-500/40 bg-red-500/10 text-red-300 hover:bg-red-500/20 hover:border-red-500/60 hover:text-red-200"
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openEdit(member)}
+                          disabled={isBusy}
+                          className="border-border"
+                        >
+                          <Pencil className="size-4" />
+                          {t('edit')}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setRemovingMember(member)}
+                          disabled={isBusy}
+                          className="border-red-500/40 bg-red-500/10 text-red-300 hover:bg-red-500/20 hover:border-red-500/60 hover:text-red-200"
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </>
                     )}
                   </div>
                 </li>
@@ -523,17 +518,19 @@ export function MembersTab() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium text-foreground">
-                            {inv.label || t('untitledInvite')}
+                            {inv.label || inv.email || t('untitledInvite')}
                           </span>
                           <span
                             className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium ${inviteRoleMeta.className}`}
                           >
                             <InviteRoleIcon className="size-3" />
-                            {tRoles(inv.role)}
+                            {inv.org_role_name || tRoles(inv.role)}
                           </span>
                         </div>
                         <p className="mt-0.5 text-xs text-muted-foreground">
-                          {t('created', { date: fmtDate(inv.created_at) })} · {fmtExpiresIn(inv.expires_at, t)}
+                          {inv.email ? `${inv.email} · ` : ''}
+                          {t('created', { date: fmtDate(inv.created_at) })} ·{' '}
+                          {fmtExpiresIn(inv.expires_at, t)}
                         </p>
                       </div>
 
@@ -565,6 +562,75 @@ export function MembersTab() {
         onOpenChange={setInviteOpen}
         onCreated={loadEverything}
       />
+
+      <Dialog
+        open={editingMember !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditingMember(null);
+        }}
+      >
+        <DialogContent className="bg-popover border-border sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-popover-foreground">
+              {t('editDialogTitle')}
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              {t('editDialogDesc')}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>{t('editName')}</Label>
+              <Input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="bg-muted border-border"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{t('editEmail')}</Label>
+              <Input
+                type="email"
+                value={editEmail}
+                onChange={(e) => setEditEmail(e.target.value)}
+                className="bg-muted border-border"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{t('editRole')}</Label>
+              <Select
+                value={editOrgRoleId}
+                onValueChange={(v) => v && setEditOrgRoleId(v)}
+              >
+                <SelectTrigger className="w-full bg-muted border-border">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {orgRoles.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingMember(null)}>
+              {t('cancel')}
+            </Button>
+            <Button
+              onClick={() => void handleSaveEdit()}
+              disabled={!!pendingMemberAction}
+            >
+              {pendingMemberAction ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : null}
+              {t('saveEdit')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={removingMember !== null}

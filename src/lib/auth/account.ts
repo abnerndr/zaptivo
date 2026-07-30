@@ -76,12 +76,16 @@ export function toErrorResponse(err: unknown): NextResponse {
 export async function setMemberRole(
   accountId: string,
   userId: string,
-  role: AccountRole
+  role: AccountRole,
+  orgRoleId?: string | null,
 ) {
   if (role === 'owner') throw new Error('Cannot assign owner via setMemberRole')
   await prisma.profile.updateMany({
     where: { accountId, userId },
-    data: { accountRole: role },
+    data: {
+      accountRole: role,
+      ...(orgRoleId !== undefined ? { orgRoleId } : {}),
+    },
   })
 }
 

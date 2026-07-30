@@ -1,20 +1,6 @@
 'use client';
 
-// ============================================================
-// InviteMemberDialog
-//
-// Two-step modal:
-//   1. Form  — role + expiry + optional label → POST creates the invite.
-//   2. Result — the share URL, returned ONCE. Copy-to-clipboard, plus a
-//              "Send via WhatsApp" deep link that pre-fills wa.me with
-//              a friendly message containing the URL.
-//
-// The plaintext token is server-stored only as a SHA-256 hash, so once
-// the result step is dismissed the link is gone forever — the dialog
-// shouts this in copy.
-// ============================================================
-
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Copy, Loader2, MessageCircle, Sparkles } from 'lucide-react';
 
@@ -39,13 +25,9 @@ import {
 import { useTranslations } from 'next-intl';
 import { useAuth } from '@/hooks/use-auth';
 
-type InviteRole = 'admin' | 'agent' | 'viewer';
-
 interface InviteMemberDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Called after a successful create so the parent re-fetches the
-   *  pending-invitations list. */
   onCreated: () => void;
 }
 
@@ -55,18 +37,22 @@ const EXPIRY_OPTIONS = [
   { value: '30', labelKey: 'days30' },
 ];
 
-// Server caps label at 80 chars (see src/app/api/account/invitations/route.ts).
-// Mirror it on the client so we short-circuit before the round-trip
-// rather than letting the user submit and bounce off a 400.
 const MAX_LABEL_LEN = 80;
+
+type OrgRoleOption = {
+  id: string;
+  name: string;
+  system_key: string | null;
+  is_system: boolean;
+};
 
 interface CreatedInvite {
   url: string;
-  role: InviteRole;
+  roleLabel: string;
+  email: string;
   expiresInDays: number;
-  /** Snapshotted at creation time so a later account rename can't
-   *  retroactively change the wa.me message text on the result step. */
   accountName: string;
+  emailSent: boolean;
 }
 
 export function InviteMemberDialog({
@@ -75,29 +61,56 @@ export function InviteMemberDialog({
   onCreated,
 }: InviteMemberDialogProps) {
   const t = useTranslations('Settings.invite');
-  const tRoles = useTranslations('Settings.roles');
   const { account } = useAuth();
-  const [role, setRole] = useState<InviteRole>('agent');
+  const [roles, setRoles] = useState<OrgRoleOption[]>([]);
+  const [orgRoleId, setOrgRoleId] = useState<string>('');
+  const [email, setEmail] = useState('');
   const [expiry, setExpiry] = useState<string>('7');
   const [label, setLabel] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<CreatedInvite | null>(null);
 
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    ;(async () => {
+      try {
+        const res = await fetch('/api/account/roles');
+        const data = (await res.json()) as { roles?: OrgRoleOption[] };
+        if (cancelled || !res.ok) return;
+        const opts = (data.roles ?? []).filter((r) => r.system_key !== 'owner');
+        setRoles(opts);
+        const agent = opts.find((r) => r.system_key === 'agent');
+        setOrgRoleId((prev) => prev || agent?.id || opts[0]?.id || '');
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
   function reset() {
-    setRole('agent');
+    setEmail('');
     setExpiry('7');
     setLabel('');
     setResult(null);
     setSubmitting(false);
+    const agent = roles.find((r) => r.system_key === 'agent');
+    setOrgRoleId(agent?.id || roles[0]?.id || '');
   }
 
   async function handleCreate() {
-    // Mirror the server's max-length check so we don't ship an
-    // obviously-too-long label across the wire just to bounce off
-    // a 400. The Input also has a `maxLength={MAX_LABEL_LEN}` cap
-    // but a paste can land an over-limit string into state before
-    // the limit kicks in on the next keystroke — this is the safety
-    // net for that path.
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail || !trimmedEmail.includes('@')) {
+      toast.error(t('emailRequired'));
+      return;
+    }
+    if (!orgRoleId) {
+      toast.error(t('roleRequired'));
+      return;
+    }
     const trimmedLabel = label.trim();
     if (trimmedLabel.length > MAX_LABEL_LEN) {
       toast.error(t('labelTooLong', { max: MAX_LABEL_LEN }));
@@ -109,7 +122,8 @@ export function InviteMemberDialog({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          role,
+          orgRoleId,
+          email: trimmedEmail,
           expiresInDays: Number(expiry),
           label: trimmedLabel || undefined,
         }),
@@ -117,30 +131,37 @@ export function InviteMemberDialog({
 
       if (!res.ok) {
         const payload = await res.json().catch(() => ({}));
-        toast.error(payload.error || 'Failed to create invitation');
+        toast.error(payload.error || t('createFailed'));
         return;
       }
 
       const data = (await res.json()) as {
         url: string;
         expiresInDays: number;
+        emailSent?: boolean;
       };
+
+      const roleLabel =
+        roles.find((r) => r.id === orgRoleId)?.name ?? orgRoleId;
 
       setResult({
         url: data.url,
-        role,
+        roleLabel,
+        email: trimmedEmail,
         expiresInDays: data.expiresInDays,
-        // Snapshot the account name into the result so the wa.me
-        // share message has team context. Falls back to a generic
-        // string if `account` hasn't loaded yet (shouldn't happen
-        // — the dialog requires admin+ which requires a loaded
-        // profile — but stay safe).
-        accountName: account?.name ?? 'our wacrm account',
+        accountName: account?.name ?? 'wacrm',
+        emailSent: !!data.emailSent,
       });
+
+      if (data.emailSent) {
+        toast.success(t('emailSentToast'));
+      } else {
+        toast.message(t('emailNotSentToast'));
+      }
       onCreated();
     } catch (err) {
       console.error('[InviteMemberDialog] create error:', err);
-      toast.error('Could not reach the server. Try again?');
+      toast.error(t('networkError'));
     } finally {
       setSubmitting(false);
     }
@@ -152,20 +173,17 @@ export function InviteMemberDialog({
       await navigator.clipboard.writeText(result.url);
       toast.success(t('copied'));
     } catch {
-      // Most likely "not in a secure context" — happens on http://
-      // local IPs. Surface the link in the toast so the admin can
-      // hand-copy it.
       toast.error(t('clipboardBlocked'));
     }
   }
 
   function whatsappShareUrl(url: string): string {
-    // Include the account name so the recipient knows which team
-    // they're being invited to before clicking through. This matters
-    // for users in multi-team contexts where "our wacrm account"
-    // wouldn't be enough to disambiguate.
-    const accountName = result?.accountName ?? 'our wacrm account';
-    const message = t('whatsappMessage', { accountName, expiresInDays: result?.expiresInDays ?? 0, url });
+    const accountName = result?.accountName ?? 'wacrm';
+    const message = t('whatsappMessage', {
+      accountName,
+      expiresInDays: result?.expiresInDays ?? 0,
+      url,
+    });
     return `https://wa.me/?text=${encodeURIComponent(message)}`;
   }
 
@@ -173,9 +191,6 @@ export function InviteMemberDialog({
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        // Reset state when the dialog closes — both for cancel and
-        // for dismissal after a successful create. The plaintext URL
-        // is intentionally NOT preserved across opens.
         if (!next) reset();
         onOpenChange(next);
       }}
@@ -190,9 +205,9 @@ export function InviteMemberDialog({
               </DialogTitle>
               <DialogDescription className="text-muted-foreground">
                 {t.rich('inviteCreatedDesc', {
-                  role: tRoles(result.role),
+                  role: result.roleLabel,
                   days: result.expiresInDays,
-                  bold: (chunks: React.ReactNode) => <strong>{chunks}</strong>
+                  bold: (chunks: React.ReactNode) => <strong>{chunks}</strong>,
                 })}
               </DialogDescription>
             </DialogHeader>
@@ -216,11 +231,6 @@ export function InviteMemberDialog({
                 </Button>
               </div>
 
-              {/* Higher-contrast amber than the original 10% / amber-200.
-                  Reviewed against slate-900 to meet WCAG AAA for body
-                  text (target ratio 7:1). Border bumped to /50, bg to
-                  /15, foreground promoted to amber-100 for the strong
-                  intro, amber-200 for the body. */}
               <div className="rounded-md border border-amber-500/50 bg-amber-500/15 px-3 py-2 text-xs text-amber-200">
                 <strong className="font-semibold text-amber-100">
                   {t('saveLinkNow')}
@@ -228,11 +238,6 @@ export function InviteMemberDialog({
                 {t('saveLinkHint')}
               </div>
 
-              {/* Anchor styled with `buttonVariants` rather than wrapping
-                  in <Button asChild>. The wacrm Button is the Base UI
-                  ButtonPrimitive — it has no Radix-style asChild slot.
-                  Direct anchor preserves right-click "Open in new tab"
-                  behaviour too. */}
               <a
                 href={whatsappShareUrl(result.url)}
                 target="_blank"
@@ -260,7 +265,9 @@ export function InviteMemberDialog({
         ) : (
           <>
             <DialogHeader>
-              <DialogTitle className="text-popover-foreground">{t('dialogTitle')}</DialogTitle>
+              <DialogTitle className="text-popover-foreground">
+                {t('dialogTitle')}
+              </DialogTitle>
               <DialogDescription className="text-muted-foreground">
                 {t('dialogDesc')}
               </DialogDescription>
@@ -268,23 +275,34 @@ export function InviteMemberDialog({
 
             <div className="space-y-4 py-2">
               <div className="space-y-2">
+                <Label className="text-muted-foreground">{t('emailLabel')}</Label>
+                <Input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder={t('emailPlaceholder')}
+                  className="bg-muted border-border text-foreground"
+                />
+              </div>
+
+              <div className="space-y-2">
                 <Label className="text-muted-foreground">{t('roleLabel')}</Label>
                 <Select
-                  value={role}
-                  onValueChange={(v) => v && setRole(v as InviteRole)}
+                  value={orgRoleId}
+                  onValueChange={(v) => v && setOrgRoleId(v)}
                 >
                   <SelectTrigger className="w-full bg-muted border-border text-foreground">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="admin">{tRoles('admin')}</SelectItem>
-                    <SelectItem value="agent">{tRoles('agent')}</SelectItem>
-                    <SelectItem value="viewer">{tRoles('viewer')}</SelectItem>
+                    {roles.map((r) => (
+                      <SelectItem key={r.id} value={r.id}>
+                        {r.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">
-                  {tRoles(`${role}Hint` as 'adminHint' | 'agentHint' | 'viewerHint')}
-                </p>
               </div>
 
               <div className="space-y-2">
@@ -309,7 +327,9 @@ export function InviteMemberDialog({
               <div className="space-y-2">
                 <Label className="text-muted-foreground">
                   {t('labelTitle')}{' '}
-                  <span className="text-xs text-muted-foreground">{t('optional')}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {t('optional')}
+                  </span>
                 </Label>
                 <Input
                   placeholder={t('labelPlaceholder')}
@@ -318,9 +338,7 @@ export function InviteMemberDialog({
                   maxLength={MAX_LABEL_LEN}
                   className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
                 />
-                <p className="text-xs text-muted-foreground">
-                  {t('labelHint')}
-                </p>
+                <p className="text-xs text-muted-foreground">{t('labelHint')}</p>
               </div>
             </div>
 

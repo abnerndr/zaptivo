@@ -6,7 +6,7 @@ import { Pool } from 'pg'
  * Bump when Prisma schema fields change so the Next.js/Turbopack
  * global singleton does not keep a stale generated client in memory.
  */
-const PRISMA_SCHEMA_VERSION = 2
+const PRISMA_SCHEMA_VERSION = 3
 
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient

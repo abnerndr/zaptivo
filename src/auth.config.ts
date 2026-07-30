@@ -23,6 +23,8 @@ export const authConfig = {
         pathname.startsWith('/join') ||
         pathname.startsWith('/api/auth') ||
         pathname.startsWith('/api/whatsapp/webhook') ||
+        // Public invite peek (no auth) — redeem still requires session
+        (pathname.startsWith('/api/invitations/') && pathname.endsWith('/peek')) ||
         pathname === '/'
 
       if (isPublic) {

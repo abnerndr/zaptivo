@@ -1,28 +1,45 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db/prisma";
-import { requireSessionAccount } from "@/lib/auth/context";
+import { NextResponse } from 'next/server'
+import { auth } from '@/auth'
+import { redeemInviteForUser } from '@/lib/auth/bootstrap'
+
+type Ctx = { params: Promise<{ token: string }> }
 
 /**
- * Migrated stub — src/app/api/invitations/[token]/redeem/route.ts
- * Full behaviour may need follow-up; auth + account scoping via Prisma.
+ * Redeem invite for the currently authenticated user.
+ * Creates/moves Profile onto the invite's Tenant — never creates a Tenant.
  */
-export async function GET() {
+export async function POST(_req: Request, ctx: Ctx) {
   try {
-    const ctx = await requireSessionAccount();
-    return NextResponse.json({ ok: true, accountId: ctx.accountId, notice: "endpoint migrated to Prisma shell — expand as needed" });
-  } catch (err) {
-    if (err instanceof Response) return err;
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
-  }
-}
+    const session = await auth()
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+    }
 
-export async function POST(req: Request) {
-  try {
-    const ctx = await requireSessionAccount();
-    const body = await req.json().catch(() => ({}));
-    return NextResponse.json({ ok: true, accountId: ctx.accountId, received: body });
+    const { token } = await ctx.params
+    if (!token || token.length < 16) {
+      return NextResponse.json({ error: 'Token inválido' }, { status: 400 })
+    }
+
+    const result = await redeemInviteForUser({
+      inviteToken: token,
+      userId: session.user.id,
+    })
+
+    return NextResponse.json({
+      ok: true,
+      accountId: result.accountId,
+      accountName: result.accountName,
+      alreadyMember: result.alreadyMember,
+    })
   } catch (err) {
-    if (err instanceof Response) return err;
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    const message = err instanceof Error ? err.message : 'Erro ao aceitar convite'
+    const status =
+      message.includes('inválido') ||
+      message.includes('expirado') ||
+      message.includes('outro e-mail') ||
+      message.includes('proprietário')
+        ? 400
+        : 500
+    return NextResponse.json({ error: message }, { status })
   }
 }

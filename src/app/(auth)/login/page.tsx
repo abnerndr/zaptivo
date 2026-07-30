@@ -30,7 +30,7 @@ function LoginPageInner() {
   const inviteToken = searchParams.get("invite");
   const t = useTranslations("LoginPage");
 
-  const [cpf, setCpf] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -42,7 +42,7 @@ function LoginPageInner() {
     setLoading(true);
 
     const result = await signIn("credentials", {
-      cpf,
+      identifier,
       password,
       redirect: false,
     });
@@ -88,16 +88,16 @@ function LoginPageInner() {
             )}
 
             <div className="flex flex-col gap-2">
-              <Label htmlFor="cpf" className="text-muted-foreground">
-                {t("cpfLabel")}
+              <Label htmlFor="identifier" className="text-muted-foreground">
+                {t("identifierLabel")}
               </Label>
               <Input
-                id="cpf"
+                id="identifier"
                 type="text"
-                inputMode="numeric"
-                placeholder={t("cpfPlaceholder")}
-                value={cpf}
-                onChange={(e) => setCpf(e.target.value)}
+                autoComplete="username"
+                placeholder={t("identifierPlaceholder")}
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
                 required
                 className="border-border bg-muted text-foreground placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/20"
               />

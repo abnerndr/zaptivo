@@ -93,6 +93,7 @@ model Tenant {
 
   profiles              Profile[]
   invitations           AccountInvitation[]
+  orgRoles              OrgRole[]
   contacts              Contact[]
   tags                  Tag[]
   customFields          CustomField[]
@@ -126,14 +127,17 @@ model Profile {
   avatarUrl     String?      @map("avatar_url")
   role          String       @default("user") // legacy unused
   accountRole   AccountRole  @map("account_role")
+  orgRoleId     String?      @map("org_role_id") @db.Uuid
   betaFeatures  String[]     @default([]) @map("beta_features")
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")
 
-  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  account Tenant @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account Tenant   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  orgRole OrgRole? @relation(fields: [orgRoleId], references: [id], onDelete: SetNull)
 
   @@index([accountId, accountRole])
+  @@index([orgRoleId])
   @@map("profiles")
 }
 
@@ -142,6 +146,8 @@ model AccountInvitation {
   accountId        String      @map("account_id") @db.Uuid
   tokenHash        String      @unique @map("token_hash")
   role             AccountRole
+  orgRoleId        String?     @map("org_role_id") @db.Uuid
+  email            String?
   createdByUserId  String?     @map("created_by_user_id") @db.Uuid
   label            String?
   createdAt        DateTime    @default(now()) @map("created_at")
@@ -149,10 +155,57 @@ model AccountInvitation {
   acceptedAt       DateTime?   @map("accepted_at")
   acceptedByUserId String?     @map("accepted_by_user_id") @db.Uuid
 
-  account Tenant @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  account Tenant   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  orgRole OrgRole? @relation(fields: [orgRoleId], references: [id], onDelete: SetNull)
 
   @@index([accountId, expiresAt])
   @@map("account_invitations")
+}
+
+/// Global permission catalog (seeded). Keys are stable API identifiers.
+model Permission {
+  key         String   @id
+  label       String
+  description String?
+  groupKey    String   @map("group_key")
+  sortOrder   Int      @default(0) @map("sort_order")
+
+  rolePermissions OrgRolePermission[]
+
+  @@map("permissions")
+}
+
+/// Per-tenant role. System roles (owner/admin/agent/viewer) are seeded
+/// and cannot be deleted; custom roles are editable by admin+.
+model OrgRole {
+  id          String   @id @default(uuid()) @db.Uuid
+  accountId   String   @map("account_id") @db.Uuid
+  name        String
+  description String?
+  isSystem    Boolean  @default(false) @map("is_system")
+  systemKey   String?  @map("system_key") // owner | admin | agent | viewer
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  account     Tenant              @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  permissions OrgRolePermission[]
+  profiles    Profile[]
+  invitations AccountInvitation[]
+
+  @@unique([accountId, systemKey])
+  @@index([accountId])
+  @@map("org_roles")
+}
+
+model OrgRolePermission {
+  orgRoleId     String @map("org_role_id") @db.Uuid
+  permissionKey String @map("permission_key")
+
+  orgRole    OrgRole    @relation(fields: [orgRoleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionKey], references: [key], onDelete: Cascade)
+
+  @@id([orgRoleId, permissionKey])
+  @@map("org_role_permissions")
 }
 
 model MemberPresence {

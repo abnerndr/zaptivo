@@ -51,6 +51,11 @@ function SignupPageInner() {
       return;
     }
 
+    if (inviteToken && !email.trim()) {
+      setError("E-mail é obrigatório para aceitar um convite");
+      return;
+    }
+
     setLoading(true);
 
     const res = await fetch("/api/auth/signup", {
@@ -61,10 +66,11 @@ function SignupPageInner() {
         cpf,
         email: email.trim() || undefined,
         password,
+        inviteToken: inviteToken || undefined,
       }),
     });
 
-    const data = (await res.json()) as { error?: string };
+    const data = (await res.json()) as { error?: string; joinedViaInvite?: boolean };
     if (!res.ok) {
       setError(data.error ?? "Erro no cadastro");
       setLoading(false);
@@ -72,7 +78,7 @@ function SignupPageInner() {
     }
 
     const signInResult = await signIn("credentials", {
-      cpf,
+      identifier: email.trim() || cpf,
       password,
       redirect: false,
     });
@@ -83,11 +89,8 @@ function SignupPageInner() {
       return;
     }
 
-    if (inviteToken) {
-      router.push(`/join/${encodeURIComponent(inviteToken)}`);
-    } else {
-      router.push("/dashboard");
-    }
+    // Invite signup already linked the profile — skip /join redeem.
+    router.push("/dashboard");
     router.refresh();
   };
 

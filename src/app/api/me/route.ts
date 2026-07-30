@@ -10,7 +10,11 @@ export async function GET() {
 
   const profile = await prisma.profile.findUnique({
     where: { userId: session.user.id },
-    include: { account: true },
+    include: {
+      account: true,
+      orgRole: { select: { id: true, name: true, systemKey: true } },
+      user: { select: { cpf: true } },
+    },
   })
 
   if (!profile) {
@@ -23,6 +27,7 @@ export async function GET() {
       name: session.user.name,
       email: session.user.email,
       image: session.user.image,
+      cpf: profile.user.cpf,
     },
     profile: {
       id: profile.id,
@@ -33,6 +38,8 @@ export async function GET() {
       beta_features: profile.betaFeatures,
       account_id: profile.accountId,
       account_role: profile.accountRole,
+      org_role_id: profile.orgRoleId,
+      org_role_name: profile.orgRole?.name ?? null,
       created_at: profile.createdAt.toISOString(),
     },
     account: {

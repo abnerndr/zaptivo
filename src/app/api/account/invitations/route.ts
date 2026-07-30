@@ -1,11 +1,16 @@
 import { NextResponse } from 'next/server'
-import {
-  requireRole,
-  toErrorResponse,
-} from '@/lib/auth/account'
+import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { prisma } from '@/lib/db/prisma'
-import { createHash, randomBytes } from 'crypto'
+import {
+  clampExpiryDays,
+  generateInviteToken,
+  inviteExpiresAt,
+  inviteUrl,
+} from '@/lib/auth/invitations'
+import { ensureSystemOrgRoles } from '@/lib/auth/org-roles'
+import { sendInviteEmail } from '@/lib/email/sendgrid'
 import type { AccountRole } from '@/lib/auth/roles'
+import { isAccountRole } from '@/lib/auth/roles'
 
 export async function GET() {
   try {
@@ -17,12 +22,8 @@ export async function GET() {
         expiresAt: { gt: new Date() },
       },
       orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        role: true,
-        label: true,
-        createdAt: true,
-        expiresAt: true,
+      include: {
+        orgRole: { select: { id: true, name: true, systemKey: true } },
       },
     })
 
@@ -31,6 +32,9 @@ export async function GET() {
       .map((r) => ({
         id: r.id,
         role: r.role as 'admin' | 'agent' | 'viewer',
+        org_role_id: r.orgRoleId,
+        org_role_name: r.orgRole?.name ?? null,
+        email: r.email,
         label: r.label,
         created_at: r.createdAt.toISOString(),
         expires_at: r.expiresAt.toISOString(),
@@ -47,44 +51,103 @@ export async function POST(request: Request) {
     const ctx = await requireRole('admin')
     const body = (await request.json().catch(() => ({}))) as {
       role?: AccountRole
+      orgRoleId?: string
+      email?: string
       label?: string
       expiresInDays?: number
     }
 
-    const role = body.role ?? 'agent'
-    if (role === 'owner' || !['admin', 'agent', 'viewer'].includes(role)) {
-      return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
+    const email = body.email?.trim().toLowerCase()
+    if (!email || !email.includes('@')) {
+      return NextResponse.json(
+        { error: 'E-mail do convidado é obrigatório' },
+        { status: 400 },
+      )
     }
 
-    const days = Math.min(Math.max(Number(body.expiresInDays) || 7, 1), 30)
-    const token = randomBytes(32).toString('base64url')
-    const tokenHash = createHash('sha256').update(token).digest('hex')
-    const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000)
+    await ensureSystemOrgRoles(ctx.accountId)
+
+    let role: AccountRole = 'agent'
+    let orgRoleId: string | null = null
+    let roleLabel = 'Agente'
+
+    if (body.orgRoleId) {
+      const orgRole = await prisma.orgRole.findFirst({
+        where: { id: body.orgRoleId, accountId: ctx.accountId },
+      })
+      if (!orgRole) {
+        return NextResponse.json({ error: 'Cargo inválido' }, { status: 400 })
+      }
+      if (orgRole.systemKey === 'owner') {
+        return NextResponse.json(
+          { error: 'Não é possível convidar como proprietário' },
+          { status: 400 },
+        )
+      }
+      orgRoleId = orgRole.id
+      roleLabel = orgRole.name
+      if (orgRole.systemKey && isAccountRole(orgRole.systemKey)) {
+        role = orgRole.systemKey
+      } else {
+        role = 'agent'
+      }
+    } else {
+      role = body.role ?? 'agent'
+      if (role === 'owner' || !['admin', 'agent', 'viewer'].includes(role)) {
+        return NextResponse.json({ error: 'Cargo inválido' }, { status: 400 })
+      }
+      const systemRole = await prisma.orgRole.findFirst({
+        where: { accountId: ctx.accountId, systemKey: role },
+      })
+      orgRoleId = systemRole?.id ?? null
+      roleLabel = systemRole?.name ?? role
+    }
+
+    const days = clampExpiryDays(body.expiresInDays)
+    const { token, hash } = generateInviteToken()
+    const expiresAt = inviteExpiresAt(days)
 
     const invite = await prisma.accountInvitation.create({
       data: {
         accountId: ctx.accountId,
-        tokenHash,
+        tokenHash: hash,
         role,
+        orgRoleId,
+        email,
         label: body.label?.trim() || null,
         createdByUserId: ctx.userId,
         expiresAt,
       },
     })
 
-    const site = (process.env.NEXT_PUBLIC_SITE_URL ?? '').replace(/\/$/, '')
-    const url = `${site}/join/${token}`
+    const site =
+      process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') ||
+      process.env.AUTH_URL?.replace(/\/$/, '') ||
+      'http://localhost:3000'
+    const url = inviteUrl(token, site)
+
+    const emailResult = await sendInviteEmail({
+      to: email,
+      orgName: ctx.account.name,
+      roleLabel,
+      joinUrl: url,
+      expiresAt,
+    })
 
     return NextResponse.json({
       invitation: {
         id: invite.id,
         role: invite.role,
+        org_role_id: invite.orgRoleId,
+        email: invite.email,
         label: invite.label,
         created_at: invite.createdAt.toISOString(),
         expires_at: invite.expiresAt.toISOString(),
       },
       url,
       expiresInDays: days,
+      emailSent: emailResult.sent,
+      emailError: emailResult.reason,
     })
   } catch (err) {
     return toErrorResponse(err)

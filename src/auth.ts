@@ -6,23 +6,54 @@ import { authConfig } from '@/auth.config'
 import { normalizeCpf, isValidCpf } from '@/lib/auth/cpf'
 import { verifyPassword } from '@/lib/auth/password'
 
+function looksLikeCpf(raw: string): boolean {
+  const digits = raw.replace(/\D/g, '')
+  return digits.length >= 11 && /^\d[\d.\-\s]*$/.test(raw.trim())
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
   trustHost: true,
   adapter: PrismaAdapter(prisma),
   providers: [
     Credentials({
-      name: 'CPF',
+      name: 'Credentials',
       credentials: {
+        identifier: { label: 'E-mail ou CPF', type: 'text' },
+        // Keep `cpf` for backwards compatibility with older clients
         cpf: { label: 'CPF', type: 'text' },
         password: { label: 'Senha', type: 'password' },
       },
       async authorize(credentials) {
-        const cpfRaw = String(credentials?.cpf ?? '')
         const password = String(credentials?.password ?? '')
-        if (!isValidCpf(cpfRaw) || !password) return null
-        const cpf = normalizeCpf(cpfRaw)
-        const user = await prisma.user.findUnique({ where: { cpf } })
+        const raw = String(
+          credentials?.identifier ?? credentials?.cpf ?? '',
+        ).trim()
+        if (!raw || !password) return null
+
+        let user =
+          looksLikeCpf(raw) && isValidCpf(raw)
+            ? await prisma.user.findUnique({
+                where: { cpf: normalizeCpf(raw) },
+              })
+            : null
+
+        if (!user && raw.includes('@')) {
+          user = await prisma.user.findUnique({
+            where: { email: raw.toLowerCase() },
+          })
+        }
+
+        // Fallback: try CPF normalize even if looksLikeCpf was loose
+        if (!user) {
+          const digits = raw.replace(/\D/g, '')
+          if (digits.length === 11 && isValidCpf(digits)) {
+            user = await prisma.user.findUnique({
+              where: { cpf: digits },
+            })
+          }
+        }
+
         if (!user?.passwordHash) return null
         const ok = await verifyPassword(password, user.passwordHash)
         if (!ok) return null

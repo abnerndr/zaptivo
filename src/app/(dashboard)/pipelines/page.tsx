@@ -5,6 +5,15 @@ import { toast } from 'sonner'
 import { Loader2, Plus } from 'lucide-react'
 import type { Deal, PipelineStage } from '@/types'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { PipelineBoard } from '@/components/pipelines/pipeline-board'
 import { DealFormDialog } from '@/components/pipelines/deal-form-dialog'
 
@@ -19,22 +28,39 @@ export default function PipelinesPage() {
   const [pipelineId, setPipelineId] = useState<string | null>(null)
   const [deals, setDeals] = useState<Deal[]>([])
   const [loading, setLoading] = useState(true)
+  const [creating, setCreating] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [newName, setNewName] = useState('Sales pipeline')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dialogStageId, setDialogStageId] = useState<string | null>(null)
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   const active = pipelines.find((p) => p.id === pipelineId) ?? null
 
   const loadPipelines = useCallback(async () => {
     setLoading(true)
+    setLoadError(null)
     try {
-      const res = await fetch('/api/pipelines')
-      if (!res.ok) throw new Error('Falha ao carregar pipelines')
-      const data = (await res.json()) as { pipelines: PipelineRow[] }
-      setPipelines(data.pipelines)
-      setPipelineId((prev) => prev ?? data.pipelines[0]?.id ?? null)
+      const res = await fetch('/api/pipelines', { cache: 'no-store' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(
+          typeof data.error === 'string'
+            ? data.error
+            : `Falha ao carregar pipelines (${res.status})`,
+        )
+      }
+      const list = (data.pipelines as PipelineRow[]) ?? []
+      setPipelines(list)
+      setPipelineId((prev) => {
+        if (prev && list.some((p) => p.id === prev)) return prev
+        return list[0]?.id ?? null
+      })
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro')
+      const msg = err instanceof Error ? err.message : 'Erro'
+      setLoadError(msg)
+      toast.error(msg)
     } finally {
       setLoading(false)
     }
@@ -42,10 +68,19 @@ export default function PipelinesPage() {
 
   const loadDeals = useCallback(async (id: string) => {
     try {
-      const res = await fetch(`/api/deals?pipeline_id=${encodeURIComponent(id)}`)
-      if (!res.ok) throw new Error('Falha ao carregar deals')
-      const data = (await res.json()) as { deals: Deal[] }
-      setDeals(data.deals)
+      const res = await fetch(
+        `/api/deals?pipeline_id=${encodeURIComponent(id)}`,
+        { cache: 'no-store' },
+      )
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(
+          typeof data.error === 'string'
+            ? data.error
+            : `Falha ao carregar deals (${res.status})`,
+        )
+      }
+      setDeals((data.deals as Deal[]) ?? [])
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro')
     }
@@ -64,19 +99,41 @@ export default function PipelinesPage() {
   }, [pipelineId, loadDeals])
 
   const createPipeline = async () => {
-    const res = await fetch('/api/pipelines', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'Sales pipeline' }),
-    })
-    if (!res.ok) {
-      toast.error('Falha ao criar pipeline')
-      return
+    const name = newName.trim() || 'Sales pipeline'
+    setCreating(true)
+    try {
+      const res = await fetch('/api/pipelines', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(
+          typeof data.error === 'string'
+            ? data.error
+            : `Falha ao criar pipeline (${res.status})`,
+        )
+      }
+      const pipeline = data.pipeline as PipelineRow | undefined
+      if (!pipeline?.id) {
+        throw new Error('Resposta inválida da API ao criar pipeline')
+      }
+      toast.success('Pipeline criado')
+      setCreateOpen(false)
+      setNewName('Sales pipeline')
+      setPipelines((prev) => {
+        if (prev.some((p) => p.id === pipeline.id)) return prev
+        return [...prev, pipeline]
+      })
+      setPipelineId(pipeline.id)
+      // Refresh from server so stages are guaranteed present
+      void loadPipelines()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro')
+    } finally {
+      setCreating(false)
     }
-    const data = (await res.json()) as { pipeline: PipelineRow }
-    toast.success('Pipeline criado')
-    setPipelines((prev) => [...prev, data.pipeline])
-    setPipelineId(data.pipeline.id)
   }
 
   const onDealMoved = async (dealId: string, newStageId: string) => {
@@ -89,7 +146,10 @@ export default function PipelinesPage() {
       body: JSON.stringify({ stage_id: newStageId }),
     })
     if (!res.ok) {
-      toast.error('Falha ao mover deal')
+      const data = await res.json().catch(() => ({}))
+      toast.error(
+        typeof data.error === 'string' ? data.error : 'Falha ao mover deal',
+      )
       if (pipelineId) void loadDeals(pipelineId)
     }
   }
@@ -102,23 +162,66 @@ export default function PipelinesPage() {
     )
   }
 
+  const createDialog = (
+    <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+      <DialogContent className="bg-popover border-border sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Novo pipeline</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-1.5">
+          <Label htmlFor="pipeline-name">Nome</Label>
+          <Input
+            id="pipeline-name"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void createPipeline()
+            }}
+          />
+          <p className="text-xs text-muted-foreground">
+            Stages padrão (Lead → Won) serão criados automaticamente.
+          </p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setCreateOpen(false)}>
+            Cancelar
+          </Button>
+          <Button onClick={() => void createPipeline()} disabled={creating}>
+            {creating ? <Loader2 className="size-4 animate-spin" /> : null}
+            Criar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+
   if (!active) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center gap-3 p-6">
+      <div className="flex min-h-[24rem] flex-col items-center justify-center gap-3">
         <h1 className="text-xl font-semibold">Pipelines</h1>
         <p className="text-sm text-muted-foreground">
-          Nenhum pipeline ainda. Crie o primeiro para começar.
+          {loadError
+            ? `Erro: ${loadError}`
+            : 'Nenhum pipeline ainda. Crie o primeiro para começar.'}
         </p>
-        <Button onClick={() => void createPipeline()}>
-          <Plus className="size-4" />
-          Criar pipeline
-        </Button>
+        <div className="flex gap-2">
+          {loadError ? (
+            <Button variant="outline" onClick={() => void loadPipelines()}>
+              Tentar de novo
+            </Button>
+          ) : null}
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus className="size-4" />
+            Criar pipeline
+          </Button>
+        </div>
+        {createDialog}
       </div>
     )
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4 p-6">
+    <div className="flex min-h-[calc(100vh-8rem)] flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-xl font-semibold">Pipelines</h1>
         <select
@@ -132,15 +235,25 @@ export default function PipelinesPage() {
             </option>
           ))}
         </select>
-        <Button variant="outline" size="sm" onClick={() => void createPipeline()}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setCreateOpen(true)}
+        >
           <Plus className="size-4" />
           Novo pipeline
         </Button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-x-auto">
+      {(!active.stages || active.stages.length === 0) && (
+        <p className="text-sm text-amber-500">
+          Este pipeline não tem stages. Recarregue a página ou crie outro.
+        </p>
+      )}
+
+      <div className="min-h-[28rem] flex-1 overflow-x-auto">
         <PipelineBoard
-          stages={active.stages}
+          stages={active.stages ?? []}
           deals={deals}
           onDealMoved={onDealMoved}
           onAddDeal={(stageId) => {
@@ -166,6 +279,7 @@ export default function PipelinesPage() {
           if (pipelineId) void loadDeals(pipelineId)
         }}
       />
+      {createDialog}
     </div>
   )
 }

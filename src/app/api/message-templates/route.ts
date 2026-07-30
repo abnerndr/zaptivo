@@ -14,8 +14,11 @@ export async function GET() {
         id: t.id,
         name: t.name,
         language: t.language,
+        category: t.category,
         status: t.status,
         body_text: t.bodyText,
+        footer_text: t.footerText,
+        updated_at: t.updatedAt.toISOString(),
       })),
     })
   } catch (err) {

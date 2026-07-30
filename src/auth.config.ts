@@ -42,6 +42,11 @@ export const authConfig = {
       }
 
       if (!isLoggedIn) {
+        // APIs must return JSON 401 — never HTML login redirect.
+        // Client fetch() follows redirects and then fails to parse JSON.
+        if (pathname.startsWith('/api/')) {
+          return Response.json({ error: 'Unauthorized' }, { status: 401 })
+        }
         const login = new URL('/login', request.nextUrl)
         login.searchParams.set('callbackUrl', pathname)
         return Response.redirect(login)

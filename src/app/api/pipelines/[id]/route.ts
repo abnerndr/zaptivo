@@ -5,6 +5,18 @@ import { serializePipeline } from '@/lib/pipelines/serialize'
 
 type Ctx = { params: Promise<{ id: string }> }
 
+function toErrorResponse(err: unknown, label: string) {
+  if (err instanceof Response) {
+    return NextResponse.json(
+      { error: 'Unauthorized' },
+      { status: err.status || 401 },
+    )
+  }
+  const message = err instanceof Error ? err.message : 'Internal error'
+  console.error(label, err)
+  return NextResponse.json({ error: message }, { status: 500 })
+}
+
 export async function PATCH(req: Request, ctx: Ctx) {
   try {
     const session = await requireSessionAccount()
@@ -27,8 +39,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     })
     return NextResponse.json({ pipeline: serializePipeline(pipeline) })
   } catch (err) {
-    if (err instanceof Response) return err
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+    return toErrorResponse(err, '[api/pipelines PATCH]')
   }
 }
 
@@ -45,7 +56,6 @@ export async function DELETE(_req: Request, ctx: Ctx) {
     await prisma.pipeline.delete({ where: { id } })
     return NextResponse.json({ ok: true })
   } catch (err) {
-    if (err instanceof Response) return err
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+    return toErrorResponse(err, '[api/pipelines DELETE]')
   }
 }

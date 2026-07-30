@@ -107,7 +107,8 @@ export function DealFormDialog({
             ...(contactId ? { contact_id: contactId } : {}),
           }),
         })
-        if (!res.ok) throw new Error('Falha ao atualizar deal')
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(data.error ?? 'Falha ao atualizar deal')
       } else {
         const res = await fetch('/api/deals', {
           method: 'POST',
@@ -122,7 +123,8 @@ export function DealFormDialog({
             notes: notes || undefined,
           }),
         })
-        if (!res.ok) throw new Error('Falha ao criar deal')
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(data.error ?? 'Falha ao criar deal')
       }
       toast.success(editing ? 'Deal atualizado' : 'Deal criado')
       onOpenChange(false)

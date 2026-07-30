@@ -76,11 +76,18 @@ export function PipelineBoard({
     const { active, over } = event;
     if (!over) return;
     const dealId = String(active.id);
-    const targetStageId = String(over.id);
+
+    // Drop target may be a stage column OR another deal card — resolve
+    // the latter to that deal's stage so moves don't silently no-op.
+    let targetStageId = String(over.id);
+    if (!sortedStages.some((s) => s.id === targetStageId)) {
+      const overDeal = deals.find((d) => d.id === targetStageId);
+      if (!overDeal) return;
+      targetStageId = overDeal.stage_id;
+    }
 
     const deal = deals.find((d) => d.id === dealId);
     if (!deal || deal.stage_id === targetStageId) return;
-    if (!sortedStages.some((s) => s.id === targetStageId)) return;
 
     onDealMoved(dealId, targetStageId);
   }

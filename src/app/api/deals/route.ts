@@ -3,6 +3,18 @@ import { prisma } from '@/lib/db/prisma'
 import { requireSessionAccount } from '@/lib/auth/context'
 import { serializeDeal } from '@/lib/pipelines/serialize'
 
+function toErrorResponse(err: unknown, label: string) {
+  if (err instanceof Response) {
+    return NextResponse.json(
+      { error: 'Unauthorized' },
+      { status: err.status || 401 },
+    )
+  }
+  const message = err instanceof Error ? err.message : 'Internal error'
+  console.error(label, err)
+  return NextResponse.json({ error: message }, { status: 500 })
+}
+
 export async function GET(req: Request) {
   try {
     const ctx = await requireSessionAccount()
@@ -23,8 +35,7 @@ export async function GET(req: Request) {
     })
     return NextResponse.json({ deals: deals.map(serializeDeal) })
   } catch (err) {
-    if (err instanceof Response) return err
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+    return toErrorResponse(err, '[api/deals GET]')
   }
 }
 
@@ -88,7 +99,6 @@ export async function POST(req: Request) {
     })
     return NextResponse.json({ deal: serializeDeal(deal) }, { status: 201 })
   } catch (err) {
-    if (err instanceof Response) return err
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+    return toErrorResponse(err, '[api/deals POST]')
   }
 }

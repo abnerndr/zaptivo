@@ -65,6 +65,8 @@ const SECURITY_HEADERS = [
 ] as const;
 
 const nextConfig: NextConfig = {
+  // Monorepo workspace packages (compiled to dist/, also transpiled if needed)
+  transpilePackages: ["@wacrm/database", "@wacrm/shared"],
   /**
    * Cache-Control policy.
    *

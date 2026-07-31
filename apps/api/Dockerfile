@@ -16,10 +16,10 @@ COPY --from=prune /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 RUN pnpm install --frozen-lockfile=false
 COPY --from=prune /app/out/full/ .
 ENV DATABASE_URL="postgresql://build:build@127.0.0.1:5432/build?schema=public"
-RUN pnpm --filter @wacrm/database db:generate
-RUN pnpm --filter @wacrm/shared build
-RUN pnpm --filter @wacrm/database build
-RUN pnpm --filter @wacrm/api build
+# shared + database (prisma generate + tsc) before Nest build
+RUN pnpm --filter @wacrm/shared build \
+  && pnpm --filter @wacrm/database build \
+  && pnpm --filter @wacrm/api build
 
 FROM base AS runner
 ENV NODE_ENV=production

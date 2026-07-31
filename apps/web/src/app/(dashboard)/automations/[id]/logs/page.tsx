@@ -1,4 +1,5 @@
 'use client'
+import { apiFetch } from '@/lib/api/client'
 
 import { useCallback, useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
@@ -31,7 +32,7 @@ export default function AutomationLogsPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/automations/${params.id}/logs`)
+      const res = await apiFetch(`/api/automations/${params.id}/logs`)
       if (!res.ok) throw new Error('Falha ao carregar logs')
       const data = (await res.json()) as { logs: LogRow[] }
       setLogs(data.logs)

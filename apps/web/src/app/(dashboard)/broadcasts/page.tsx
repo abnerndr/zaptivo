@@ -1,4 +1,5 @@
 'use client'
+import { apiFetch } from '@/lib/api/client'
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
@@ -32,7 +33,7 @@ export default function BroadcastsPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/broadcasts')
+      const res = await apiFetch('/api/broadcasts')
       if (!res.ok) throw new Error('Falha ao carregar')
       const data = (await res.json()) as { broadcasts: BroadcastRow[] }
       setRows(data.broadcasts)

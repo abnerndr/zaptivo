@@ -1,4 +1,5 @@
 'use client'
+import { apiFetch } from '@/lib/api/client'
 
 import { useCallback, useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
@@ -46,7 +47,7 @@ export default function EditAutomationPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/automations/${params.id}`)
+      const res = await apiFetch(`/api/automations/${params.id}`)
       if (!res.ok) throw new Error('Não encontrado')
       const data = (await res.json()) as {
         automation: {
@@ -111,7 +112,7 @@ export default function EditAutomationPage() {
         trigger_config = { tag_id: triggerTagId }
       }
 
-      const res = await fetch(`/api/automations/${params.id}`, {
+      const res = await apiFetch(`/api/automations/${params.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

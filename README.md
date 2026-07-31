@@ -21,6 +21,25 @@ The marketing site and self-host docs live in a separate repo:
 ([wacrm.tech](https://wacrm.tech)). This repo is the product —
 clone or fork it to run your own CRM.
 
+## Monorepo (Turborepo)
+
+```
+apps/web   — Next.js UI + Auth.js (/api/auth)
+apps/api   — NestJS API (todas as demais rotas /api/*)
+apps/mcp   — MCP server
+packages/database — Prisma schema + client
+packages/shared   — tipos compartilhados
+```
+
+```bash
+pnpm install
+pnpm db:generate
+pnpm dev          # web :3000 + api :4000
+```
+
+Deploy Dokploy: ver [docs/dokploy.md](./docs/dokploy.md) (dois Dockerfiles).
+
+
 ## What you get out of the box
 
 - **Shared inbox** on the official WhatsApp Business API — multiple

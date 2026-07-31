@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client'
 import type { MessageStatus } from '@/types'
 
 export const inboxKeys = {
@@ -33,7 +34,7 @@ export type InboxMessage = {
 }
 
 export async function fetchConversations(): Promise<InboxConversation[]> {
-  const res = await fetch('/api/inbox/conversations', { cache: 'no-store' })
+  const res = await apiFetch('/api/inbox/conversations', { cache: 'no-store' })
   if (!res.ok) throw new Error('Falha ao carregar conversas')
   const data = (await res.json()) as { conversations: InboxConversation[] }
   return data.conversations ?? []
@@ -42,8 +43,7 @@ export async function fetchConversations(): Promise<InboxConversation[]> {
 export async function fetchMessages(
   conversationId: string,
 ): Promise<InboxMessage[]> {
-  const res = await fetch(
-    `/api/inbox/messages?conversationId=${encodeURIComponent(conversationId)}`,
+  const res = await apiFetch(`/api/inbox/messages?conversationId=${encodeURIComponent(conversationId)}`,
     { cache: 'no-store' },
   )
   if (!res.ok) throw new Error('Falha ao carregar mensagens')

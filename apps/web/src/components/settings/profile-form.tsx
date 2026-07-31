@@ -1,4 +1,5 @@
 'use client'
+import { apiFetch } from '@/lib/api/client'
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
@@ -60,7 +61,7 @@ export function ProfileForm() {
     let cancelled = false
     ;(async () => {
       try {
-        const res = await fetch('/api/me')
+        const res = await apiFetch('/api/me')
         if (!res.ok) return
         const data = (await res.json()) as {
           user?: { cpf?: string }
@@ -112,7 +113,7 @@ export function ProfileForm() {
       const form = new FormData()
       form.set('file', file)
       form.set('kind', 'avatars')
-      const res = await fetch('/api/storage/upload', {
+      const res = await apiFetch('/api/storage/upload', {
         method: 'POST',
         body: form,
       })
@@ -125,7 +126,7 @@ export function ProfileForm() {
         return
       }
       setAvatarUrl(data.publicUrl)
-      const saveRes = await fetch('/api/me', {
+      const saveRes = await apiFetch('/api/me', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ avatar_url: data.publicUrl }),
@@ -163,7 +164,7 @@ export function ProfileForm() {
 
     setSaving(true)
     try {
-      const res = await fetch('/api/me', {
+      const res = await apiFetch('/api/me', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -1,4 +1,5 @@
 'use client'
+import { apiFetch } from '@/lib/api/client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
@@ -79,7 +80,7 @@ export function DealFormDialog({
       setLoadingContacts(true)
       try {
         const qs = new URLSearchParams({ pageSize: '50', ...(q ? { q } : {}) })
-        const res = await fetch(`/api/contacts?${qs}`)
+        const res = await apiFetch(`/api/contacts?${qs}`)
         if (!res.ok) throw new Error('Falha ao buscar contatos')
         const data = (await res.json()) as { contacts: ContactOption[] }
         const rows = data.contacts ?? []
@@ -123,7 +124,7 @@ export function DealFormDialog({
     setSaving(true)
     try {
       if (editing && deal) {
-        const res = await fetch(`/api/deals/${deal.id}`, {
+        const res = await apiFetch(`/api/deals/${deal.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -137,7 +138,7 @@ export function DealFormDialog({
         const data = await res.json().catch(() => ({}))
         if (!res.ok) throw new Error(data.error ?? 'Falha ao atualizar deal')
       } else {
-        const res = await fetch('/api/deals', {
+        const res = await apiFetch('/api/deals', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

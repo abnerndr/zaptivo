@@ -1,4 +1,5 @@
 'use client'
+import { apiFetch } from '@/lib/api/client'
 
 import { useCallback, useEffect, useState } from 'react'
 import { Loader2, Plus } from 'lucide-react'
@@ -54,7 +55,7 @@ export function TagSelectField({
     if (controlledTags !== undefined) return
     setLoading(true)
     try {
-      const res = await fetch('/api/tags', { cache: 'no-store' })
+      const res = await apiFetch('/api/tags', { cache: 'no-store' })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error ?? 'Falha ao carregar tags')
       setLocalTags((data.tags as TagOption[]) ?? [])
@@ -77,7 +78,7 @@ export function TagSelectField({
     }
     setCreating(true)
     try {
-      const res = await fetch('/api/tags', {
+      const res = await apiFetch('/api/tags', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, color: '#3b82f6' }),

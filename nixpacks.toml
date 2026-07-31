@@ -1,28 +1,19 @@
-# Nixpacks / Dokploy — Next.js 16 + Prisma 7
-# Port: 3000
+# Deprecated for Dokploy: use Dockerfiles in apps/web and apps/api instead.
+# Kept temporarily for reference. Prefer:
+#   - apps/web/Dockerfile  (port 3000)
+#   - apps/api/Dockerfile  (port 4000)
 #
-# Importante: ao customizar nixPkgs, incluir "..." para NÃO sobrescrever
-# o nodejs do provider (senão: npm: command not found).
+# See docs/dokploy.md
 
 providers = ["node"]
 
 [variables]
 NODE_ENV = "production"
 NEXT_TELEMETRY_DISABLED = "1"
-NPM_CONFIG_PRODUCTION = "false"
 NIXPACKS_NODE_VERSION = "20"
 
 [phases.setup]
-# "..." = pacotes do provider node (nodejs_20, etc.)
 nixPkgs = ["...", "openssl"]
 
 [phases.install]
-cmds = ["npm ci --include=dev"]
-
-[phases.build]
-cmds = [
-  "DATABASE_URL=\"${DATABASE_URL:-postgresql://build:build@127.0.0.1:5432/build?schema=public}\" npx prisma generate && npm run build",
-]
-
-[start]
-cmd = "npm run start:dokploy"
+cmds = ["echo 'Use Dockerfile deploy (apps/web + apps/api) on Dokploy' && exit 1"]

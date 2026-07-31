@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from '@/lib/api/client'
 
 import { useEffect, useState } from "react";
 import { Loader2, MessageSquare, Zap } from "lucide-react";
@@ -39,7 +40,7 @@ export function QuickReplyPicker({
     setLoading(true);
     void (async () => {
       try {
-        const res = await fetch("/api/quick-replies", { cache: "no-store" });
+        const res = await apiFetch("/api/quick-replies", { cache: "no-store" });
         const data = await res.json().catch(() => ({}));
         if (!cancelled && res.ok) {
           setItems((data.quick_replies as QuickReply[]) ?? []);

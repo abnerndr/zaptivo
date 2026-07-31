@@ -1,4 +1,5 @@
 'use client'
+import { apiFetch } from '@/lib/api/client'
 
 import { useCallback, useEffect, useState } from "react"
 import { useAuth } from "@/hooks/use-auth"
@@ -23,7 +24,7 @@ export function usePresence() {
       setRows([])
       return
     }
-    const res = await fetch("/api/presence")
+    const res = await apiFetch("/api/presence")
     if (!res.ok) return
     const data = (await res.json()) as { presence: PresenceRow[] }
     setRows(data.presence)

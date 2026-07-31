@@ -1,4 +1,5 @@
 'use client';
+import { apiFetch } from '@/lib/api/client'
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -75,7 +76,7 @@ export function InviteMemberDialog({
     let cancelled = false;
     ;(async () => {
       try {
-        const res = await fetch('/api/account/roles');
+        const res = await apiFetch('/api/account/roles');
         const data = (await res.json()) as { roles?: OrgRoleOption[] };
         if (cancelled || !res.ok) return;
         const opts = (data.roles ?? []).filter((r) => r.system_key !== 'owner');
@@ -118,7 +119,7 @@ export function InviteMemberDialog({
     }
     setSubmitting(true);
     try {
-      const res = await fetch('/api/account/invitations', {
+      const res = await apiFetch('/api/account/invitations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

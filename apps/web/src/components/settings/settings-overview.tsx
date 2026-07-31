@@ -1,4 +1,5 @@
 'use client'
+import { apiFetch } from '@/lib/api/client'
 
 import { useEffect, useState, type ReactNode } from 'react'
 import {
@@ -94,7 +95,7 @@ export function SettingsOverview(props: {
     let cancelled = false
     ;(async () => {
       try {
-        const res = await fetch('/api/account/overview')
+        const res = await apiFetch('/api/account/overview')
         if (!res.ok) throw new Error('failed')
         const json = (await res.json()) as OverviewData
         if (!cancelled) setData(json)

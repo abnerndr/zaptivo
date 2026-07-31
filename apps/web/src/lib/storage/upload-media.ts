@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client'
 /**
  * Media upload helper — Cloudflare R2 via `/api/storage/upload`.
  * Path convention kept from Supabase era for compatibility:
@@ -47,7 +48,7 @@ export async function uploadAccountMedia(
   const form = new FormData()
   form.set('file', file)
   form.set('kind', kindFromBucket(bucket))
-  const res = await fetch('/api/storage/upload', { method: 'POST', body: form })
+  const res = await apiFetch('/api/storage/upload', { method: 'POST', body: form })
   const data = (await res.json()) as {
     error?: string
     publicUrl?: string
@@ -63,7 +64,7 @@ export async function deleteAccountMedia(
   _bucket: string,
   path: string
 ): Promise<void> {
-  const res = await fetch('/api/storage/upload', {
+  const res = await apiFetch('/api/storage/upload', {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ path }),

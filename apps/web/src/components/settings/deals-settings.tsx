@@ -1,4 +1,5 @@
 'use client'
+import { apiFetch } from '@/lib/api/client'
 
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
@@ -46,7 +47,7 @@ export function DealsSettings() {
     if (!canEdit || !dirty) return
     setSaving(true)
     try {
-      const res = await fetch('/api/account', {
+      const res = await apiFetch('/api/account', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ default_currency: currency }),

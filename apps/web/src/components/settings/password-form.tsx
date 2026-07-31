@@ -1,4 +1,5 @@
 'use client'
+import { apiFetch } from '@/lib/api/client'
 
 import { useState } from 'react'
 import { toast } from 'sonner'
@@ -33,7 +34,7 @@ export function PasswordForm() {
 
     setSaving(true)
     try {
-      const res = await fetch('/api/me/password', {
+      const res = await apiFetch('/api/me/password', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ currentPassword, newPassword }),

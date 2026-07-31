@@ -1,4 +1,5 @@
 'use client'
+import { apiFetch } from '@/lib/api/client'
 
 import { useState } from 'react'
 import { toast } from 'sonner'
@@ -26,7 +27,7 @@ export function SessionsCard() {
   async function handleSignOutEverywhere() {
     setSigningOut(true)
     try {
-      const res = await fetch('/api/me/sessions', { method: 'DELETE' })
+      const res = await apiFetch('/api/me/sessions', { method: 'DELETE' })
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string }
         toast.error(

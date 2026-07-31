@@ -55,7 +55,8 @@ const SECURITY_HEADERS = [
       "font-src 'self' data:",
       // Supabase REST + realtime (WSS). All Meta API calls happen
       // server-side, so graph.facebook.com does not belong here.
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+      // Nest API (NEXT_PUBLIC_API_URL) + optional Supabase realtime leftovers
+      "connect-src 'self' http://localhost:4000 http://127.0.0.1:4000 https: wss://*.supabase.co",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",

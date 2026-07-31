@@ -1,4 +1,5 @@
 'use client'
+import { apiFetch } from '@/lib/api/client'
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
@@ -42,7 +43,7 @@ export default function JoinPage() {
     let cancelled = false
     ;(async () => {
       try {
-        const res = await fetch(`/api/invitations/${encodeURIComponent(token)}/peek`)
+        const res = await apiFetch(`/api/invitations/${encodeURIComponent(token)}/peek`)
         const data = (await res.json()) as Peek
         if (!cancelled) setPeek(data)
       } catch {
@@ -59,7 +60,7 @@ export default function JoinPage() {
     setRedeeming(true)
     setError(null)
     try {
-      const res = await fetch(`/api/invitations/${encodeURIComponent(token)}/redeem`, {
+      const res = await apiFetch(`/api/invitations/${encodeURIComponent(token)}/redeem`, {
         method: 'POST',
       })
       const data = (await res.json()) as { error?: string }

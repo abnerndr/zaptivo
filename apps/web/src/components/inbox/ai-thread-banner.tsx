@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from '@/lib/api/client'
 
 import { useState, useEffect, useCallback } from "react";
 import { Sparkles, Hand, Undo2, Loader2 } from "lucide-react";
@@ -27,7 +28,7 @@ async function fetchAiAccountStatus(accountId: string): Promise<AiAccountStatus>
   const cached = statusCache.get(accountId);
   if (cached) return cached;
   try {
-    const res = await fetch("/api/ai/config", { cache: "no-store" });
+    const res = await apiFetch("/api/ai/config", { cache: "no-store" });
     if (!res.ok) return { autoReplyOn: false }; // don't cache a transient failure
     const j = await res.json();
     const status = {
@@ -101,7 +102,7 @@ export function AiThreadBanner({
     async (paused: boolean) => {
       setBusy(true);
       try {
-        const res = await fetch(`/api/ai/autoreply/${conversationId}`, {
+        const res = await apiFetch(`/api/ai/autoreply/${conversationId}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           // "Take over" also assigns the thread to the acting agent.

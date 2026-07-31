@@ -1,5 +1,5 @@
 {
-  "name": "wacrm-mcp",
+  "name": "@wacrm/mcp",
   "version": "0.1.1",
   "mcpName": "io.github.ArnasDon/wacrm-mcp",
   "description": "Model Context Protocol (MCP) server for wacrm — drive your self-hosted WhatsApp CRM from Claude, Cursor, and other MCP clients.",
@@ -9,7 +9,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ArnasDon/wacrm.git",
-    "directory": "mcp-server"
+    "directory": "apps/mcp"
   },
   "keywords": [
     "mcp",

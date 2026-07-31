@@ -10,6 +10,25 @@ export const authConfig = {
   // Credentials provider requires JWT sessions (Auth.js constraint).
   // Users still live in Prisma; Session table reserved for future OAuth.
   session: { strategy: 'jwt' },
+  ...(process.env.AUTH_COOKIE_DOMAIN
+    ? {
+        cookies: {
+          sessionToken: {
+            name:
+              process.env.NODE_ENV === 'production'
+                ? '__Secure-authjs.session-token'
+                : 'authjs.session-token',
+            options: {
+              httpOnly: true,
+              sameSite: 'lax' as const,
+              path: '/',
+              secure: process.env.NODE_ENV === 'production',
+              domain: process.env.AUTH_COOKIE_DOMAIN,
+            },
+          },
+        },
+      }
+    : {}),
   providers: [],
   callbacks: {
     authorized({ auth, request }) {
@@ -22,9 +41,6 @@ export const authConfig = {
         pathname.startsWith('/forgot-password') ||
         pathname.startsWith('/join') ||
         pathname.startsWith('/api/auth') ||
-        pathname.startsWith('/api/whatsapp/webhook') ||
-        // Public invite peek (no auth) — redeem still requires session
-        (pathname.startsWith('/api/invitations/') && pathname.endsWith('/peek')) ||
         pathname === '/'
 
       if (isPublic) {
@@ -42,11 +58,7 @@ export const authConfig = {
       }
 
       if (!isLoggedIn) {
-        // APIs must return JSON 401 — never HTML login redirect.
-        // Client fetch() follows redirects and then fails to parse JSON.
-        if (pathname.startsWith('/api/')) {
-          return Response.json({ error: 'Unauthorized' }, { status: 401 })
-        }
+        // Business APIs live on Nest (@wacrm/api). Only Auth.js remains under /api/auth.
         const login = new URL('/login', request.nextUrl)
         login.searchParams.set('callbackUrl', pathname)
         return Response.redirect(login)

@@ -1,4 +1,5 @@
 'use client'
+import { apiFetch } from '@/lib/api/client'
 
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '@/hooks/use-auth'
@@ -13,7 +14,7 @@ export function useUnreadNotifications() {
       setCount(0)
       return
     }
-    const res = await fetch('/api/notifications/unread-count')
+    const res = await apiFetch('/api/notifications/unread-count')
     if (!res.ok) return
     const data = (await res.json()) as { count: number }
     setCount(data.count)

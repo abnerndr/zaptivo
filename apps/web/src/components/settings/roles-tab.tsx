@@ -1,4 +1,5 @@
 'use client'
+import { apiFetch } from '@/lib/api/client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
@@ -56,7 +57,7 @@ export function RolesTab() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/account/roles')
+      const res = await apiFetch('/api/account/roles')
       const data = (await res.json()) as {
         roles?: OrgRoleRow[]
         permissions?: Permission[]
@@ -127,12 +128,12 @@ export function RolesTab() {
         permissions: [...selected],
       }
       const res = editing
-        ? await fetch(`/api/account/roles/${editing.id}`, {
+        ? await apiFetch(`/api/account/roles/${editing.id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
           })
-        : await fetch('/api/account/roles', {
+        : await apiFetch('/api/account/roles', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
@@ -156,7 +157,7 @@ export function RolesTab() {
     if (!deleteId) return
     setSaving(true)
     try {
-      const res = await fetch(`/api/account/roles/${deleteId}`, {
+      const res = await apiFetch(`/api/account/roles/${deleteId}`, {
         method: 'DELETE',
       })
       const data = (await res.json().catch(() => ({}))) as { error?: string }

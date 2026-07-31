@@ -1,4 +1,5 @@
 'use client'
+import { apiFetch } from '@/lib/api/client'
 
 import { useCallback, useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
@@ -22,7 +23,7 @@ export default function FlowEditorPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/flows/${params.id}`)
+      const res = await apiFetch(`/api/flows/${params.id}`)
       if (!res.ok) throw new Error('Flow não encontrado')
       const data = (await res.json()) as {
         flow: {
@@ -94,7 +95,7 @@ export default function FlowEditorPage() {
     setSaving(true)
     try {
       const nodes = buildNodes()
-      const res = await fetch(`/api/flows/${params.id}`, {
+      const res = await apiFetch(`/api/flows/${params.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -126,7 +127,7 @@ export default function FlowEditorPage() {
 
   const activate = async (active: boolean) => {
     await save()
-    const res = await fetch(`/api/flows/${params.id}/activate`, {
+    const res = await apiFetch(`/api/flows/${params.id}/activate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ active }),

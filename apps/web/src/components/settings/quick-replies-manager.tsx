@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from '@/lib/api/client'
 
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, MessageSquare, Pencil, Plus, Trash2, Zap } from "lucide-react";
@@ -51,7 +52,7 @@ export function QuickRepliesManager() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/quick-replies", { cache: "no-store" });
+      const res = await apiFetch("/api/quick-replies", { cache: "no-store" });
       const data = await res.json().catch(() => ({}));
       if (res.ok) setItems((data.quick_replies as QuickReply[]) ?? []);
     } finally {
@@ -113,7 +114,7 @@ export function QuickRepliesManager() {
   const remove = useCallback(
     async (id: string) => {
       if (!window.confirm("Delete this quick reply?")) return;
-      const res = await fetch(`/api/quick-replies/${id}`, { method: "DELETE" });
+      const res = await apiFetch(`/api/quick-replies/${id}`, { method: "DELETE" });
       if (!res.ok) {
         toast.error("Couldn't delete the quick reply.");
         return;

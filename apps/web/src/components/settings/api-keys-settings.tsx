@@ -1,4 +1,5 @@
 'use client';
+import { apiFetch } from '@/lib/api/client'
 
 // ============================================================
 // ApiKeysSettings — Settings → API keys
@@ -80,7 +81,7 @@ export function ApiKeysSettings() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch('/api/account/api-keys', { cache: 'no-store' });
+      const res = await apiFetch('/api/account/api-keys', { cache: 'no-store' });
       if (!res.ok) {
         const payload = await res.json().catch(() => ({}));
         toast.error(payload.error || t('loadFailed'));
@@ -104,7 +105,7 @@ export function ApiKeysSettings() {
   async function handleRevoke(key: ApiKey) {
     setRevoking(key.id);
     try {
-      const res = await fetch(`/api/account/api-keys/${key.id}`, {
+      const res = await apiFetch(`/api/account/api-keys/${key.id}`, {
         method: 'DELETE',
       });
       if (!res.ok) {
@@ -318,7 +319,7 @@ function CreateKeyDialog({
     }
     setSubmitting(true);
     try {
-      const res = await fetch('/api/account/api-keys', {
+      const res = await apiFetch('/api/account/api-keys', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: trimmed, scopes }),

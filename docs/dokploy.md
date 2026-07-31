@@ -1,69 +1,56 @@
-# Deploy no Dokploy (Nixpacks)
+# Deploy no Dokploy (monorepo Turborepo)
 
-## App
+Dois serviços a partir do **mesmo repositório**, build context = raiz.
 
-1. Crie um **Postgres** no Dokploy e anote a `DATABASE_URL` interna.
-2. Crie a aplicação a partir do Git, **Build Type = Nixpacks**.
-3. Porta: **3000** (o `nixpacks.toml` já usa `${PORT:-3000}`).
-4. Domínio + HTTPS via Traefik como de costume.
-5. Use só `package-lock.json` (npm). Não versionar `pnpm-lock.yaml` — o Nixpacks prioriza pnpm e o build quebra.
+## 1. API (`@wacrm/api`)
 
-O build/start usam:
+| Campo | Valor |
+|-------|-------|
+| Dockerfile | `apps/api/Dockerfile` |
+| Port | `4000` |
+| Domínio sugerido | `api.seu-dominio.com` |
 
-- `nixpacks.toml` — Node 20, `npm ci --include=dev`, `prisma generate` + `next build`
-- `npm run start:dokploy` — `prisma migrate deploy` e `next start -H 0.0.0.0`
+Envs mínimas:
 
-## Variáveis de ambiente (obrigatórias)
-
-| Variável | Notas |
-|---|---|
-| `DATABASE_URL` | URL do Postgres do Dokploy (`?schema=public`) |
-| `AUTH_SECRET` | `openssl rand -base64 32` |
-| `AUTH_URL` | Mesma URL pública HTTPS (ex. `https://wacrm.ruperth.com`) |
-| `AUTH_TRUST_HOST` | `true` (obrigatório atrás do Traefik/Dokploy) |
-| `ENCRYPTION_KEY` | 32 bytes hex/base64 conforme o app |
-| `NEXT_PUBLIC_SITE_URL` | URL pública HTTPS do app |
-| `NEXT_PUBLIC_APP_LOCALE` | ex. `pt-BR` |
-
-## Storage (R2)
-
-| Variável | Notas |
-|---|---|
-| `R2_ACCOUNT_ID` | |
-| `R2_ACCESS_KEY_ID` | |
-| `R2_SECRET_ACCESS_KEY` | |
-| `R2_BUCKET` | |
-| `R2_PUBLIC_URL` | URL pública do bucket |
-
-## WAHA (serviço separado)
-
-Suba o WAHA como outro app/compose no Dokploy. No wacrm:
-
-| Variável | Notas |
-|---|---|
-| `WAHA_BASE_URL` | URL interna ou pública do WAHA (não use `localhost` entre containers) |
-| `WAHA_API_KEY` | se habilitado no WAHA |
-| `WAHA_WEBHOOK_SECRET` | deve bater com o webhook configurado |
-
-Webhook tipicamente: `https://<seu-dominio>/api/whatsapp/webhook`
-
-## Build
-
-`DATABASE_URL` precisa existir no **runtime** (migrate + app). No build, `prisma generate` não precisa de DB vivo; se o Dokploy exigir a var no build, cole a mesma URL.
-
-**Não rode `yarn db:migrate:sql`** — legado Supabase/Meta; corrompe o schema Prisma/WAHA.
-O script está bloqueado por padrão. Canônico: `npx prisma migrate deploy` (já no `start:dokploy`).
-
-## Seed do admin
-
-Depois do primeiro deploy (migrate ok), rode uma vez no container ou local apontando para o mesmo `DATABASE_URL`:
-
-```bash
-SEED_ADMIN_CPF=52998224725 \
-SEED_ADMIN_PASSWORD='troque-esta-senha' \
-SEED_ADMIN_NAME='Admin' \
-SEED_ADMIN_EMAIL=admin@seudominio.com \
-npx prisma db seed
+```
+DATABASE_URL=postgresql://...
+AUTH_SECRET=<mesmo do web>
+WEB_ORIGIN=https://app.seu-dominio.com
+PORT=4000
+# + WAHA / R2 / SendGrid / AI conforme uso
 ```
 
-Login no app com o CPF + senha. Role criada: `owner`.
+O container roda `prisma migrate deploy` no start e sobe o Nest.
+
+## 2. Web (`@wacrm/web`)
+
+| Campo | Valor |
+|-------|-------|
+| Dockerfile | `apps/web/Dockerfile` |
+| Port | `3000` |
+| Domínio sugerido | `app.seu-dominio.com` |
+
+Envs mínimas:
+
+```
+DATABASE_URL=postgresql://...   # só Auth.js adapter
+AUTH_SECRET=<mesmo da api>
+AUTH_URL=https://app.seu-dominio.com
+AUTH_TRUST_HOST=true
+AUTH_COOKIE_DOMAIN=.seu-dominio.com
+NEXT_PUBLIC_SITE_URL=https://app.seu-dominio.com
+NEXT_PUBLIC_API_URL=https://api.seu-dominio.com
+ENCRYPTION_KEY=...
+```
+
+## Cookies cross-subdomain
+
+Para o browser enviar o JWT Auth.js à API:
+
+1. `AUTH_COOKIE_DOMAIN=.seu-dominio.com` no **web**
+2. `WEB_ORIGIN=https://app.seu-dominio.com` na **api** (CORS + credentials)
+3. `NEXT_PUBLIC_API_URL=https://api.seu-dominio.com` no **web**
+
+## Webhooks / cron
+
+Aponte Meta/WAHA webhooks e crons de automations/flows para o host da **API** (`https://api.../api/whatsapp/webhook`, etc.).

@@ -1,4 +1,5 @@
 'use client'
+import { apiFetch } from '@/lib/api/client'
 
 import { useCallback, useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
@@ -30,7 +31,7 @@ export default function BroadcastDetailPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/broadcasts/${params.id}`)
+      const res = await apiFetch(`/api/broadcasts/${params.id}`)
       if (!res.ok) throw new Error('Broadcast não encontrado')
       const data = (await res.json()) as { broadcast: Broadcast }
       setBroadcast(data.broadcast)

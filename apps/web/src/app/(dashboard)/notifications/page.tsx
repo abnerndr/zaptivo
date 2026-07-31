@@ -1,4 +1,5 @@
 'use client'
+import { apiFetch } from '@/lib/api/client'
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
@@ -55,7 +56,7 @@ export default function NotificationsPage() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch('/api/notifications?limit=50', {
+      const res = await apiFetch('/api/notifications?limit=50', {
         cache: 'no-store',
       })
       if (!res.ok) throw new Error('failed')
@@ -90,7 +91,7 @@ export default function NotificationsPage() {
           )
         : prev,
     )
-    const res = await fetch('/api/notifications', {
+    const res = await apiFetch('/api/notifications', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ids }),
@@ -106,7 +107,7 @@ export default function NotificationsPage() {
     if (unreadCount === 0) return
     setMarkingAll(true)
     try {
-      const res = await fetch('/api/notifications', {
+      const res = await apiFetch('/api/notifications', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ all: true }),

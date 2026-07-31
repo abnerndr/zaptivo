@@ -1,4 +1,5 @@
 'use client'
+import { apiFetch } from '@/lib/api/client'
 
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -38,8 +39,8 @@ export default function FlowsPage() {
     setLoading(true)
     try {
       const [fRes, tRes] = await Promise.all([
-        fetch('/api/flows'),
-        fetch('/api/flows/templates'),
+        apiFetch('/api/flows'),
+        apiFetch('/api/flows/templates'),
       ])
       if (!fRes.ok) throw new Error('Falha ao carregar flows')
       const fData = (await fRes.json()) as { flows: FlowRow[] }
@@ -60,7 +61,7 @@ export default function FlowsPage() {
   }, [load])
 
   const createBlank = async () => {
-    const res = await fetch('/api/flows', {
+    const res = await apiFetch('/api/flows', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: 'Novo flow' }),
@@ -74,7 +75,7 @@ export default function FlowsPage() {
   }
 
   const createFromTemplate = async (slug: string) => {
-    const res = await fetch('/api/flows', {
+    const res = await apiFetch('/api/flows', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ template_slug: slug }),

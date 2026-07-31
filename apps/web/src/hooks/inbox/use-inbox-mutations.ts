@@ -1,4 +1,5 @@
 'use client'
+import { apiFetch } from '@/lib/api/client'
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -22,7 +23,7 @@ export function useSyncWhatsapp() {
         params.set('conversationId', opts.conversationId)
       }
       const qs = params.toString()
-      const res = await fetch(`/api/whatsapp/sync${qs ? `?${qs}` : ''}`, {
+      const res = await apiFetch(`/api/whatsapp/sync${qs ? `?${qs}` : ''}`, {
         method: 'POST',
       })
       const data = (await res.json().catch(() => ({}))) as {
@@ -60,8 +61,7 @@ export function useMarkConversationRead() {
 
   return useMutation({
     mutationFn: async (conversationId: string) => {
-      const res = await fetch(
-        `/api/inbox/conversations/${encodeURIComponent(conversationId)}/read`,
+      const res = await apiFetch(`/api/inbox/conversations/${encodeURIComponent(conversationId)}/read`,
         { method: 'POST' },
       )
       if (!res.ok) {
@@ -107,7 +107,7 @@ export function useSendMessage() {
       content: string
       tempId: string
     }) => {
-      const res = await fetch('/api/whatsapp/send', {
+      const res = await apiFetch('/api/whatsapp/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

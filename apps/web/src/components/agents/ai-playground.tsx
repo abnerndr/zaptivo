@@ -1,4 +1,5 @@
 'use client';
+import { apiFetch } from '@/lib/api/client'
 
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -32,7 +33,7 @@ export function AiPlayground({ onGoToSetup }: { onGoToSetup?: () => void }) {
     setInput('');
     setSending(true);
     try {
-      const res = await fetch('/api/ai/playground', {
+      const res = await apiFetch('/api/ai/playground', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         // Send only role+content — the server ignores anything else.

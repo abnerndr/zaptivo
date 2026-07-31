@@ -1,4 +1,5 @@
 'use client'
+import { apiFetch } from '@/lib/api/client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
@@ -219,7 +220,7 @@ export default function InboxPage() {
     }
     setSavingContact(true)
     try {
-      const res = await fetch(`/api/contacts/${selectedContact.id}`, {
+      const res = await apiFetch(`/api/contacts/${selectedContact.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),

@@ -1,4 +1,5 @@
 'use client'
+import { apiFetch } from '@/lib/api/client'
 
 import { useCallback, useEffect, useState } from 'react'
 import {
@@ -64,7 +65,7 @@ export default function DashboardPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/dashboard', { cache: 'no-store' })
+      const res = await apiFetch('/api/dashboard', { cache: 'no-store' })
       if (!res.ok) throw new Error('failed')
       const json = (await res.json()) as DashboardData
       setData(json)

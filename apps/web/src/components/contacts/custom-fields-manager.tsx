@@ -1,4 +1,5 @@
 'use client'
+import { apiFetch } from '@/lib/api/client'
 
 import { useCallback, useEffect, useState } from 'react'
 import { Loader2, Plus, Trash2 } from 'lucide-react'
@@ -32,7 +33,7 @@ export function CustomFieldsManager() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/custom-fields', { cache: 'no-store' })
+      const res = await apiFetch('/api/custom-fields', { cache: 'no-store' })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error ?? 'Falha ao carregar campos')
       setFields((data.custom_fields as FieldRow[]) ?? [])
@@ -54,7 +55,7 @@ export function CustomFieldsManager() {
     }
     setSaving(true)
     try {
-      const res = await fetch('/api/custom-fields', {
+      const res = await apiFetch('/api/custom-fields', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -79,7 +80,7 @@ export function CustomFieldsManager() {
     if (!confirm('Excluir este campo? Valores nos contatos serão removidos.')) {
       return
     }
-    const res = await fetch(`/api/custom-fields/${id}`, { method: 'DELETE' })
+    const res = await apiFetch(`/api/custom-fields/${id}`, { method: 'DELETE' })
     if (!res.ok) {
       toast.error('Falha ao excluir')
       return

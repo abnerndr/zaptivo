@@ -1,4 +1,5 @@
 'use client'
+import { apiFetch } from '@/lib/api/client'
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -25,7 +26,7 @@ export default function NewAutomationPage() {
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    void fetch('/api/automations/templates')
+    void apiFetch('/api/automations/templates')
       .then((r) => r.json())
       .then((d: { templates: Template[] }) => setTemplates(d.templates ?? []))
   }, [])
@@ -33,7 +34,7 @@ export default function NewAutomationPage() {
   const fromTemplate = async (slug: string) => {
     setSaving(true)
     try {
-      const res = await fetch('/api/automations', {
+      const res = await apiFetch('/api/automations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ template_slug: slug }),
@@ -65,7 +66,7 @@ export default function NewAutomationPage() {
               match_type: 'contains',
             }
           : {}
-      const res = await fetch('/api/automations', {
+      const res = await apiFetch('/api/automations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

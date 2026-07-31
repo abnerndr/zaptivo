@@ -1,4 +1,5 @@
 'use client'
+import { apiFetch } from '@/lib/api/client'
 
 import { useCallback, useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
@@ -31,7 +32,7 @@ export default function FlowRunsPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/flows/${params.id}/runs`)
+      const res = await apiFetch(`/api/flows/${params.id}/runs`)
       if (!res.ok) throw new Error('Falha ao carregar runs')
       const data = (await res.json()) as { runs: RunRow[] }
       setRuns(data.runs)

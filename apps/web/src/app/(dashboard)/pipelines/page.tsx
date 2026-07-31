@@ -1,4 +1,5 @@
 'use client'
+import { apiFetch } from '@/lib/api/client'
 
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
@@ -42,7 +43,7 @@ export default function PipelinesPage() {
     setLoading(true)
     setLoadError(null)
     try {
-      const res = await fetch('/api/pipelines', { cache: 'no-store' })
+      const res = await apiFetch('/api/pipelines', { cache: 'no-store' })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         throw new Error(
@@ -68,8 +69,7 @@ export default function PipelinesPage() {
 
   const loadDeals = useCallback(async (id: string) => {
     try {
-      const res = await fetch(
-        `/api/deals?pipeline_id=${encodeURIComponent(id)}`,
+      const res = await apiFetch(`/api/deals?pipeline_id=${encodeURIComponent(id)}`,
         { cache: 'no-store' },
       )
       const data = await res.json().catch(() => ({}))
@@ -102,7 +102,7 @@ export default function PipelinesPage() {
     const name = newName.trim() || 'Sales pipeline'
     setCreating(true)
     try {
-      const res = await fetch('/api/pipelines', {
+      const res = await apiFetch('/api/pipelines', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
@@ -140,7 +140,7 @@ export default function PipelinesPage() {
     setDeals((prev) =>
       prev.map((d) => (d.id === dealId ? { ...d, stage_id: newStageId } : d)),
     )
-    const res = await fetch(`/api/deals/${dealId}`, {
+    const res = await apiFetch(`/api/deals/${dealId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ stage_id: newStageId }),

@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from '@/lib/api/client'
 
 /**
  * Per-node configuration form, dispatched by node_type.
@@ -847,7 +848,7 @@ function useUserTags(): UserTag[] {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/tags").catch(() => null);
+        const res = await apiFetch("/api/tags").catch(() => null);
         if (!res || !res.ok) return;
         const json = (await res.json()) as { tags?: UserTag[] };
         if (!cancelled) setTags(json.tags ?? []);

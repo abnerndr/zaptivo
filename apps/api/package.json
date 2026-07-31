@@ -1,0 +1,49 @@
+{
+  "name": "@wacrm/api",
+  "version": "0.8.0",
+  "private": true,
+  "scripts": {
+    "generate:routes": "node scripts/generate-route-registry.mjs",
+    "build": "node scripts/generate-route-registry.mjs && nest build",
+    "dev": "node scripts/generate-route-registry.mjs && nest start --watch",
+    "start": "node dist/main.js",
+    "start:prod": "prisma migrate deploy && node dist/main.js",
+    "start:dokploy": "pnpm --filter @wacrm/database db:migrate:deploy && node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1088.0",
+    "@dagrejs/dagre": "^3.0.0",
+    "@nestjs/common": "^11.1.3",
+    "@nestjs/config": "^4.0.2",
+    "@nestjs/core": "^11.1.3",
+    "@nestjs/platform-express": "^11.1.3",
+    "@prisma/client": "^7.8.0",
+    "@sendgrid/mail": "^8.1.6",
+    "@wacrm/database": "workspace:*",
+    "@wacrm/shared": "workspace:*",
+    "bcryptjs": "^3.0.3",
+    "clsx": "^2.1.1",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^17.4.2",
+    "next": "16.2.6",
+    "next-auth": "^5.0.0-beta.31",
+    "pg": "^8.22.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "tsconfig-paths": "^4.2.0"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.7",
+    "@nestjs/schematics": "^11.0.5",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cookie-parser": "^1.4.9",
+    "@types/express": "^5.0.3",
+    "@types/node": "^22",
+    "@types/pg": "^8.20.0",
+    "@wacrm/typescript-config": "workspace:*",
+    "prisma": "^7.8.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  }
+}

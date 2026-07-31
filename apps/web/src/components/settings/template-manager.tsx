@@ -1,4 +1,5 @@
 'use client'
+import { apiFetch } from '@/lib/api/client'
 
 import { useCallback, useEffect, useState } from 'react'
 import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
@@ -81,7 +82,7 @@ export function TemplateManager() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/message-templates', { cache: 'no-store' })
+      const res = await apiFetch('/api/message-templates', { cache: 'no-store' })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error ?? 'Falha ao carregar templates')
       const rows = (data.templates as Record<string, unknown>[] | undefined) ?? []
@@ -118,7 +119,7 @@ export function TemplateManager() {
     setSaving(true)
     try {
       if (draft.id) {
-        const res = await fetch(`/api/whatsapp/templates/${draft.id}`, {
+        const res = await apiFetch(`/api/whatsapp/templates/${draft.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -134,7 +135,7 @@ export function TemplateManager() {
           throw new Error(data.error ?? 'Falha ao atualizar')
         }
       } else {
-        const res = await fetch('/api/whatsapp/templates/submit', {
+        const res = await apiFetch('/api/whatsapp/templates/submit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -163,7 +164,7 @@ export function TemplateManager() {
 
   const remove = async (id: string) => {
     if (!confirm('Apagar este template?')) return
-    const res = await fetch(`/api/whatsapp/templates/${id}`, {
+    const res = await apiFetch(`/api/whatsapp/templates/${id}`, {
       method: 'DELETE',
     })
     if (!res.ok) {

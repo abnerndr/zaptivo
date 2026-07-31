@@ -1,4 +1,5 @@
 'use client';
+import { apiFetch } from '@/lib/api/client'
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -47,7 +48,7 @@ export function AiKnowledgeCard({
   const fetchDocs = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/ai/knowledge');
+      const res = await apiFetch('/api/ai/knowledge');
       const data = await res.json();
       if (res.ok) setDocs(data.documents ?? []);
       else toast.error(data.error ?? t('loadFailed'));
@@ -72,7 +73,7 @@ export function AiKnowledgeCard({
 
   const openEdit = async (id: string) => {
     try {
-      const res = await fetch(`/api/ai/knowledge/${id}`);
+      const res = await apiFetch(`/api/ai/knowledge/${id}`);
       const data = await res.json();
       if (!res.ok) {
         toast.error(data.error ?? t('openFailed'));
@@ -100,7 +101,7 @@ export function AiKnowledgeCard({
     setSaving(true);
     try {
       const isNew = editing === 'new';
-      const res = await fetch(
+      const res = await apiFetch(
         isNew ? '/api/ai/knowledge' : `/api/ai/knowledge/${editing}`,
         {
           method: isNew ? 'POST' : 'PATCH',
@@ -127,7 +128,7 @@ export function AiKnowledgeCard({
 
   const remove = async (id: string) => {
     try {
-      const res = await fetch(`/api/ai/knowledge/${id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/ai/knowledge/${id}`, { method: 'DELETE' });
       if (res.ok) {
         toast.success(t('removeSuccess'));
         setDocs((d) => d.filter((x) => x.id !== id));
@@ -143,7 +144,7 @@ export function AiKnowledgeCard({
   const reindex = async () => {
     setReindexing(true);
     try {
-      const res = await fetch('/api/ai/knowledge/reindex', { method: 'POST' });
+      const res = await apiFetch('/api/ai/knowledge/reindex', { method: 'POST' });
       const data = await res.json();
       if (res.ok && data.success) {
         toast.success(t('reindexSuccess', { count: data.reindexed }));

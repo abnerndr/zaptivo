@@ -1,4 +1,5 @@
 'use client';
+import { apiFetch } from '@/lib/api/client'
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -65,7 +66,7 @@ export function AiUsageCard() {
   const fetchUsage = useCallback(async (windowDays: number) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/ai/usage?days=${windowDays}`, {
+      const res = await apiFetch(`/api/ai/usage?days=${windowDays}`, {
         cache: 'no-store',
       });
       const json = await res.json().catch(() => null);

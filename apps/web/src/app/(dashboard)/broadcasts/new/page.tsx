@@ -1,4 +1,5 @@
 'use client'
+import { apiFetch } from '@/lib/api/client'
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -32,8 +33,8 @@ export default function NewBroadcastPage() {
   useEffect(() => {
     void (async () => {
       const [tRes, tagRes] = await Promise.all([
-        fetch('/api/message-templates'),
-        fetch('/api/tags'),
+        apiFetch('/api/message-templates'),
+        apiFetch('/api/tags'),
       ])
       if (tRes.ok) {
         const data = (await tRes.json()) as { templates: Template[] }
@@ -53,7 +54,7 @@ export default function NewBroadcastPage() {
     }
     setSaving(true)
     try {
-      const res = await fetch('/api/broadcasts', {
+      const res = await apiFetch('/api/broadcasts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

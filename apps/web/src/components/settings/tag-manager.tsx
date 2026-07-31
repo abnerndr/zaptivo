@@ -1,4 +1,5 @@
 'use client'
+import { apiFetch } from '@/lib/api/client'
 
 import { useCallback, useEffect, useState } from 'react'
 import { Loader2, Plus, Tags, Trash2 } from 'lucide-react'
@@ -48,7 +49,7 @@ export function TagManager() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/tags', { cache: 'no-store' })
+      const res = await apiFetch('/api/tags', { cache: 'no-store' })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         throw new Error(data.error ?? t('failedToLoadTags'))
@@ -73,7 +74,7 @@ export function TagManager() {
     }
     setSaving(true)
     try {
-      const res = await fetch('/api/tags', {
+      const res = await apiFetch('/api/tags', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: trimmed, color }),
@@ -96,7 +97,7 @@ export function TagManager() {
     if (!deleteId) return
     setDeleting(true)
     try {
-      const res = await fetch(`/api/tags/${deleteId}`, { method: 'DELETE' })
+      const res = await apiFetch(`/api/tags/${deleteId}`, { method: 'DELETE' })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         throw new Error(data.error ?? t('failedToDeleteTag'))

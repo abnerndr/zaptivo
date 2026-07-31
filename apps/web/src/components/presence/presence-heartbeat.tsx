@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from '@/lib/api/client'
 
 import { useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
@@ -11,7 +12,7 @@ export function PresenceHeartbeat() {
     if (!user || !accountId) return;
 
     const beat = () => {
-      void fetch("/api/presence", {
+      void apiFetch("/api/presence", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "online" }),

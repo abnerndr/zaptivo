@@ -1,4 +1,5 @@
 'use client'
+import { apiFetch } from '@/lib/api/client'
 
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -33,7 +34,7 @@ export default function AutomationsPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/automations')
+      const res = await apiFetch('/api/automations')
       if (!res.ok) throw new Error('Falha ao carregar')
       const data = (await res.json()) as { automations: AutomationRow[] }
       setRows(data.automations)
@@ -49,7 +50,7 @@ export default function AutomationsPage() {
   }, [load])
 
   const toggle = async (row: AutomationRow) => {
-    const res = await fetch(`/api/automations/${row.id}`, {
+    const res = await apiFetch(`/api/automations/${row.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ is_active: !row.is_active }),
@@ -83,7 +84,7 @@ export default function AutomationsPage() {
   }
 
   const duplicate = async (id: string) => {
-    const res = await fetch(`/api/automations/${id}/duplicate`, {
+    const res = await apiFetch(`/api/automations/${id}/duplicate`, {
       method: 'POST',
     })
     if (!res.ok) {
@@ -96,7 +97,7 @@ export default function AutomationsPage() {
 
   const remove = async (id: string) => {
     if (!confirm('Apagar esta automação?')) return
-    const res = await fetch(`/api/automations/${id}`, { method: 'DELETE' })
+    const res = await apiFetch(`/api/automations/${id}`, { method: 'DELETE' })
     if (!res.ok) {
       toast.error('Falha ao apagar')
       return

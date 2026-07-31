@@ -1,4 +1,5 @@
 'use client'
+import { apiFetch } from '@/lib/api/client'
 
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
@@ -42,7 +43,7 @@ export default function ContactsPage() {
         pageSize: '25',
         ...(search ? { q: search } : {}),
       })
-      const res = await fetch(`/api/contacts?${qs}`)
+      const res = await apiFetch(`/api/contacts?${qs}`)
       if (!res.ok) throw new Error('Falha ao carregar')
       const data = (await res.json()) as {
         contacts: ContactRow[]
@@ -66,7 +67,7 @@ export default function ContactsPage() {
       toast.error('Telefone obrigatório')
       return
     }
-    const res = await fetch('/api/contacts', {
+    const res = await apiFetch('/api/contacts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ phone, name: name || undefined }),
@@ -82,7 +83,7 @@ export default function ContactsPage() {
   }
 
   const remove = async (id: string) => {
-    const res = await fetch(`/api/contacts/${id}`, { method: 'DELETE' })
+    const res = await apiFetch(`/api/contacts/${id}`, { method: 'DELETE' })
     if (!res.ok) {
       toast.error('Falha ao remover')
       return

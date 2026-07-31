@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client'
 import type { AccountMember } from '@/types';
 
 /**
@@ -10,7 +11,7 @@ import type { AccountMember } from '@/types';
  */
 export async function fetchAccountMembers(): Promise<AccountMember[]> {
   try {
-    const res = await fetch('/api/account/members', { cache: 'no-store' });
+    const res = await apiFetch('/api/account/members', { cache: 'no-store' });
     if (!res.ok) return [];
     const json = (await res.json()) as { members?: AccountMember[] };
     return json.members ?? [];

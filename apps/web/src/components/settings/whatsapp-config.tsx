@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from '@/lib/api/client'
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -31,7 +32,7 @@ export function WhatsAppConfig() {
   const [qrUrl, setQrUrl] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    const res = await fetch("/api/whatsapp/config");
+    const res = await apiFetch("/api/whatsapp/config");
     if (!res.ok) return;
     const data = (await res.json()) as ConfigState;
     setConfig(data);
@@ -44,7 +45,7 @@ export function WhatsAppConfig() {
   }, [refresh]);
 
   const loadQr = async () => {
-    const res = await fetch("/api/whatsapp/session");
+    const res = await apiFetch("/api/whatsapp/session");
     const ct = res.headers.get("content-type") ?? "";
 
     if (!res.ok) {
@@ -75,7 +76,7 @@ export function WhatsAppConfig() {
   const save = async () => {
     setSaving(true);
     try {
-      const res = await fetch("/api/whatsapp/config", {
+      const res = await apiFetch("/api/whatsapp/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ waha_session: sessionName }),
@@ -88,7 +89,7 @@ export function WhatsAppConfig() {
       toast.success("Sessão WAHA salva");
       await refresh();
       // Só pede QR se ainda não estiver autenticada
-      const after = await fetch("/api/whatsapp/config");
+      const after = await apiFetch("/api/whatsapp/config");
       const cfg = (await after.json()) as ConfigState;
       if (cfg.status === "WORKING") {
         toast.message("Sessão já está WORKING — sem QR necessário");
@@ -102,7 +103,7 @@ export function WhatsAppConfig() {
   };
 
   const startStop = async (action: "start" | "stop" | "logout") => {
-    const res = await fetch("/api/whatsapp/session", {
+    const res = await apiFetch("/api/whatsapp/session", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action }),
@@ -124,7 +125,7 @@ export function WhatsAppConfig() {
   };
 
   const disconnect = async () => {
-    await fetch("/api/whatsapp/config", { method: "DELETE" });
+    await apiFetch("/api/whatsapp/config", { method: "DELETE" });
     setConfig({ configured: false });
     setQrUrl(null);
     toast.success("Desconectado");

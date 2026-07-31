@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from '@/lib/api/client'
 
 import {
   createContext,
@@ -88,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfileLoading(true);
     lastFetchedUserIdRef.current = userId;
     try {
-      const res = await fetch("/api/me");
+      const res = await apiFetch("/api/me");
       if (!res.ok) {
         lastFetchedUserIdRef.current = null;
         setProfile(null);

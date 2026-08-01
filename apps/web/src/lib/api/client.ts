@@ -1,5 +1,11 @@
 import axios, { type AxiosRequestConfig, type AxiosResponse } from 'axios'
 
+declare global {
+  interface Window {
+    __WACRM_API_URL__?: string
+  }
+}
+
 function apiBaseUrl(): string {
   if (typeof window === 'undefined') {
     return (
@@ -8,7 +14,12 @@ function apiBaseUrl(): string {
       'http://localhost:4000'
     )
   }
-  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
+  // Runtime inject from RootLayout (survives Dokploy env without rebuild bake-in)
+  return (
+    window.__WACRM_API_URL__ ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    'http://localhost:4000'
+  )
 }
 
 export const api = axios.create({
@@ -20,9 +31,9 @@ export const api = axios.create({
 })
 
 api.interceptors.request.use((config) => {
-  // Ensure browser picks up runtime public URL if hydrated differently
-  if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_API_URL) {
-    config.baseURL = process.env.NEXT_PUBLIC_API_URL
+  if (typeof window !== 'undefined') {
+    const runtime = window.__WACRM_API_URL__ || process.env.NEXT_PUBLIC_API_URL
+    if (runtime) config.baseURL = runtime
   }
   return config
 })

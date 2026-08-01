@@ -20,6 +20,13 @@ COPY --from=prune /app/out/full/ .
 # Dummy DATABASE_URL for prisma generate at build time
 ENV DATABASE_URL="postgresql://build:build@127.0.0.1:5432/build?schema=public"
 ENV NEXT_TELEMETRY_DISABLED=1
+# Inlined into the client bundle at build time (Dokploy → Build Args)
+ARG NEXT_PUBLIC_SITE_URL=http://localhost:3000
+ARG NEXT_PUBLIC_API_URL=http://localhost:4000
+ARG NEXT_PUBLIC_APP_LOCALE=pt-BR
+ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL \
+    NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
+    NEXT_PUBLIC_APP_LOCALE=$NEXT_PUBLIC_APP_LOCALE
 # Workspace packages export dist/ — must build before Next resolves @wacrm/*
 RUN pnpm --filter @wacrm/shared build \
   && pnpm --filter @wacrm/database build \

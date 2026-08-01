@@ -16,7 +16,9 @@
     "signUp": "Create account",
     "noAccount": "Don't have an account?",
     "createAccount": "Create account",
-    "invalidCredentials": "Invalid CPF or password"
+    "invalidCredentials": "Invalid email/CPF or password",
+    "identifierLabel": "Email or CPF",
+    "identifierPlaceholder": "you@example.com or 000.000.000-00"
   },
   "Sidebar": {
     "title": "CRM Template for WhatsApp",
@@ -1267,7 +1269,22 @@
       "removeDialogDesc": "Remove <bold>{name}</bold> from the account? They'll be signed out of this account and given a fresh personal account on their next sign-in. Their login isn't deleted.",
       "cancel": "Cancel",
       "removing": "Removing...",
-      "removeBtn": "Remove member"
+      "removeBtn": "Remove member",
+      "edit": "Edit",
+      "memberUpdatedToast": "Member updated",
+      "editDialogTitle": "Edit member",
+      "editDialogDesc": "Update this member’s name, email, and role.",
+      "editName": "Name",
+      "editEmail": "Email",
+      "editRole": "Role",
+      "saveEdit": "Save",
+      "editNameRequired": "Name is required",
+      "editFailed": "Failed to update member",
+      "removeFailed": "Failed to remove member",
+      "revokeFailed": "Failed to revoke invite",
+      "loadMembersFailed": "Failed to load members",
+      "loadInvitesFailed": "Failed to load invites",
+      "networkError": "Could not reach the server"
     },
     "invite": {
       "inviteCreated": "Invite created",
@@ -1295,7 +1312,15 @@
       "labelTooLong": "Label must be {max} characters or fewer",
       "copied": "Invite link copied",
       "clipboardBlocked": "Clipboard blocked — copy the link manually",
-      "whatsappMessage": "Join {accountName} on wacrm using this link (valid for {expiresInDays} days): {url}"
+      "whatsappMessage": "Join {accountName} on wacrm using this link (valid for {expiresInDays} days): {url}",
+      "emailLabel": "Guest email",
+      "emailPlaceholder": "name@example.com",
+      "emailRequired": "Guest email is required",
+      "roleRequired": "Role is required",
+      "createFailed": "Failed to create invite",
+      "networkError": "Could not reach the server",
+      "emailSentToast": "Invite email sent",
+      "emailNotSentToast": "Invite created — email not sent (configure SendGrid). Use the link below."
     },
     "tagsAndFields": {
       "title": "Fields & tags",
@@ -1515,7 +1540,8 @@
       "deals": "Deals & currency",
       "members": "Team members",
       "api": "API keys",
-      "quickReplies": "Quick replies"
+      "quickReplies": "Quick replies",
+      "roles": "Roles & permissions"
     },
     "groups": {
       "account": "Account",
@@ -1570,7 +1596,14 @@
       "cancel": "Cancel",
       "signingOut": "Signing out…",
       "signOutEverywhere": "Sign out everywhere",
-      "signOutFailed": "Sign-out failed: {message}"
+      "signOutFailed": "Sign-out failed: {message}",
+      "cpf": "CPF",
+      "cpfHint": "CPF cannot be changed.",
+      "sectionIdentity": "Identity",
+      "sectionContact": "Contact",
+      "sectionAccount": "Account",
+      "accountHint": "To change your password or sessions, use Login & security.",
+      "goSecurity": "Go to Login & security"
     },
     "appearance": {
       "title": "Appearance",
@@ -1701,6 +1734,40 @@
       "reindex": "Reindex",
       "reindexTooltip": "Re-embed all documents (e.g. after adding an embeddings key)",
       "loading": "Loading…"
+    },
+    "rolesPage": {
+      "title": "Roles & permissions",
+      "description": "Define what each role can do. System roles cannot be deleted.",
+      "create": "Create role",
+      "loading": "Loading…",
+      "loadFailed": "Failed to load roles",
+      "systemBadge": "System",
+      "memberCount": "{count} {count, plural, =1 {member} other {members}}",
+      "permCount": "{count} {count, plural, =1 {permission} other {permissions}}",
+      "edit": "Edit",
+      "systemLocked": "System roles have fixed permissions",
+      "createTitle": "Create role",
+      "editTitle": "Edit role",
+      "editorDesc": "Name, description, and permissions for this role.",
+      "nameLabel": "Name",
+      "descriptionLabel": "Description",
+      "permissionsLabel": "Permissions",
+      "nameRequired": "Name is required",
+      "saveFailed": "Failed to save",
+      "created": "Role created",
+      "updated": "Role updated",
+      "deleted": "Role deleted",
+      "deleteFailed": "Failed to delete",
+      "deleteTitle": "Delete role?",
+      "deleteDesc": "This cannot be undone. Reassign members first.",
+      "deleteConfirm": "Delete",
+      "cancel": "Cancel",
+      "save": "Save",
+      "groups": {
+        "equipe": "Team",
+        "conta": "Account",
+        "operacao": "Operations"
+      }
     }
   }
 }

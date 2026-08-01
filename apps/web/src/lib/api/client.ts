@@ -6,6 +6,10 @@ declare global {
   }
 }
 
+/**
+ * Browser: same-origin ('' → `/api/...` via Next proxy) unless an
+ * explicit public API URL is injected. Server: prefer internal Nest URL.
+ */
 function apiBaseUrl(): string {
   if (typeof window === 'undefined') {
     return (
@@ -14,12 +18,10 @@ function apiBaseUrl(): string {
       'http://localhost:4000'
     )
   }
-  // Runtime inject from RootLayout (survives Dokploy env without rebuild bake-in)
-  return (
-    window.__WACRM_API_URL__ ||
-    process.env.NEXT_PUBLIC_API_URL ||
-    'http://localhost:4000'
-  )
+  if (typeof window.__WACRM_API_URL__ === 'string') {
+    return window.__WACRM_API_URL__
+  }
+  return process.env.NEXT_PUBLIC_API_URL || ''
 }
 
 export const api = axios.create({
@@ -32,8 +34,7 @@ export const api = axios.create({
 
 api.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
-    const runtime = window.__WACRM_API_URL__ || process.env.NEXT_PUBLIC_API_URL
-    if (runtime) config.baseURL = runtime
+    config.baseURL = apiBaseUrl()
   }
   return config
 })

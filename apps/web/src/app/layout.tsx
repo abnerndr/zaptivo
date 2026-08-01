@@ -85,10 +85,12 @@ export default async function RootLayout({
 }>) {
   const locale = await getLocale();
   const messages = await getMessages();
-  // Public API URL for the browser — prefer non-NEXT_PUBLIC so Dokploy
-  // runtime env applies without a rebuild bake-in.
+  // Same-origin by default (Next proxies /api/* → Nest). Set
+  // API_PUBLIC_URL only if the browser must call Nest directly.
   const publicApiUrl =
-    process.env.API_PUBLIC_URL || process.env.NEXT_PUBLIC_API_URL || '';
+    process.env.API_PUBLIC_URL === undefined
+      ? ''
+      : process.env.API_PUBLIC_URL;
 
   return (
     <html
@@ -111,15 +113,13 @@ export default async function RootLayout({
           strategy="beforeInteractive"
           dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }}
         />
-        {publicApiUrl ? (
-          <Script
-            id="wacrm-api-url"
-            strategy="beforeInteractive"
-            dangerouslySetInnerHTML={{
-              __html: `window.__WACRM_API_URL__=${JSON.stringify(publicApiUrl)};`,
-            }}
-          />
-        ) : null}
+        <Script
+          id="wacrm-api-url"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `window.__WACRM_API_URL__=${JSON.stringify(publicApiUrl)};`,
+          }}
+        />
       </head>
       <body className="min-h-full bg-background text-foreground font-sans">
         <NextIntlClientProvider messages={messages} locale={locale}>

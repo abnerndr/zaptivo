@@ -39,22 +39,24 @@ AUTH_URL=https://wacrm.ruperth.com
 AUTH_TRUST_HOST=true
 AUTH_COOKIE_DOMAIN=.ruperth.com
 APP_LOCALE=pt-BR
-API_PUBLIC_URL=https://wacrm-api.ruperth.com
+API_PUBLIC_URL=
 API_INTERNAL_URL=http://wacrm-api-vd0dfr:4000
 NEXT_PUBLIC_SITE_URL=https://wacrm.ruperth.com
-NEXT_PUBLIC_API_URL=https://wacrm-api.ruperth.com
+NEXT_PUBLIC_API_URL=
 ENCRYPTION_KEY=...
 ```
 
-**Build Args** (recomendados — `NEXT_PUBLIC_*` também entra no bundle):
+`API_PUBLIC_URL` vazio → browser chama same-origin `/api/...` (proxy Next → Nest). Sem CORS.
+
+`API_INTERNAL_URL` → Nest na rede Docker (server + proxy).
+
+**Build Args** (recomendados):
 
 ```
 NEXT_PUBLIC_SITE_URL=https://wacrm.ruperth.com
-NEXT_PUBLIC_API_URL=https://wacrm-api.ruperth.com
+NEXT_PUBLIC_API_URL=
 NEXT_PUBLIC_APP_LOCALE=pt-BR
 ```
-
-`APP_LOCALE` e `API_PUBLIC_URL` valem em runtime (sem rebuild). O layout injeta `API_PUBLIC_URL` no browser.
 
 ## API (prod)
 
@@ -65,11 +67,9 @@ NEXT_PUBLIC_APP_LOCALE=pt-BR
 
 ## Cookies cross-subdomain
 
-Para o browser enviar o JWT Auth.js à API:
-
-1. `AUTH_COOKIE_DOMAIN=.ruperth.com` no **web**
-2. `WEB_ORIGIN=https://wacrm.ruperth.com` na **api** (CORS + credentials)
-3. `NEXT_PUBLIC_API_URL=https://wacrm-api.ruperth.com` no **web** (também nos **Build Args**)
+1. `AUTH_COOKIE_DOMAIN=.ruperth.com` no **web** (opcional se o browser só fala same-origin via proxy)
+2. `WEB_ORIGIN=https://wacrm.ruperth.com` na **api** (CORS residual / clients diretos)
+3. Browser usa same-origin `/api/*` (proxy Next); não aponta `API_PUBLIC_URL` para `wacrm-api`
 
 ## Webhooks / cron
 

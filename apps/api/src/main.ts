@@ -19,9 +19,28 @@ async function bootstrap() {
   const webOrigin = config.get<string>('WEB_ORIGIN', 'http://localhost:3000')
 
   app.setGlobalPrefix('api')
+  const allowedOrigins = webOrigin
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean)
   app.enableCors({
-    origin: webOrigin,
+    origin: (origin, callback) => {
+      // Non-browser / same-origin proxy callers omit Origin
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true)
+        return
+      }
+      callback(null, false)
+    },
     credentials: true,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'Accept',
+      'X-Requested-With',
+      'Cookie',
+    ],
   })
   app.use(cookieParser())
 

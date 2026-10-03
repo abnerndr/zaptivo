@@ -1,15 +1,10 @@
 node_modules
 .next
-.turbo
-dist
 .git
 .github
 docs
 **/.env
 **/.env.*
 !**/.env.example
-!**/.env.local.example
 **/coverage
 **/*.tsbuildinfo
-supabase
-.superpowers

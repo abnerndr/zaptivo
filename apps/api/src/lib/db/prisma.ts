@@ -1,1 +1,0 @@
-export { prisma, getPgPool, PrismaClient } from '@wacrm/database'

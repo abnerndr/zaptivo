@@ -15,8 +15,7 @@ coverage
 .next/
 out/
 
-# turbo / nest
-.turbo
+# build
 dist
 build
 
@@ -32,7 +31,6 @@ yarn-error.log*
 
 # env files
 .env*
-!.env.local.example
 !.env.example
 
 # vercel

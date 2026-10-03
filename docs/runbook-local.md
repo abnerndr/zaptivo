@@ -1,57 +1,31 @@
-# Local runbook — Prisma + Auth.js + R2 + SSE + WAHA
+# Runbook local
 
 ## Prerequisites
 
-1. **Postgres 16** — `docker compose up -d` (ative integração WSL no Docker Desktop se preciso)
-2. **WAHA** na porta **3001** — [docs JS/TS](https://waha.devlike.pro/docs/integrations/javascript/)
-3. **Cloudflare R2** — preencha `R2_*` em `.env.local`
-4. Secrets já gerados em `.env.local` (`AUTH_SECRET`, `ENCRYPTION_KEY`, `WAHA_WEBHOOK_SECRET`)
+1. Postgres 16 — `docker compose up -d db`
+2. WAHA na porta 3001
+3. `.env` com `DATABASE_URL`, `AUTH_SECRET`, `ENCRYPTION_KEY`, `WAHA_*`, `R2_*`
 
 ## Bootstrap
 
 ```bash
-# Prisma CLI lê .env (DATABASE_URL). App Next lê .env.local.
-docker compose up -d
-npx prisma migrate deploy   # ou: npx prisma migrate dev
-npx prisma generate
-SEED_ADMIN_PASSWORD='sua-senha-forte' yarn db:seed   # cria owner/admin
-npm run dev
+docker compose up -d db
+pnpm install
+pnpm db:generate
+pnpm db:migrate
+SEED_ADMIN_PASSWORD='sua-senha-forte' pnpm db:seed
+pnpm dev
 ```
 
-Seed (idempotente): `SEED_ADMIN_CPF` (default `52998224725`), `SEED_ADMIN_PASSWORD` (obrigatório), `SEED_ADMIN_NAME`, `SEED_ADMIN_EMAIL`. Role = `owner`. Reset de senha: `SEED_ADMIN_RESET=1`.
+Seed: `SEED_ADMIN_CPF` (default `52998224725`), `SEED_ADMIN_PASSWORD`, `SEED_ADMIN_NAME`, `SEED_ADMIN_EMAIL`. Reset: `SEED_ADMIN_RESET=1`.
 
-## Fluxo mínimo para validar
+## Validar
 
-1. http://localhost:3000/signup — CPF válido + senha (≥8) + nome
-2. Login com CPF/senha
-3. **Contatos** — listar/criar via `/api/contacts`
-4. **Settings → WhatsApp** — nome da sessão WAHA → Salvar → QR → status WORKING
-5. Webhook WAHA → `{SITE}/api/whatsapp/webhook` com header `X-Waha-Webhook-Secret`
-6. **Inbox** — conversas/mensagens + envio texto via WAHA
+1. http://localhost:3000/signup
+2. Login → Contatos / Inbox
+3. Settings → WhatsApp (sessão WAHA + QR)
+4. Webhook WAHA → `{SITE}/api/whatsapp/webhook` (`X-Waha-Webhook-Secret`)
 
-## Status da migração
+## Deploy
 
-| Área | Estado |
-|------|--------|
-| Prisma schema + client | Pronto |
-| Auth.js CPF/senha | Pronto |
-| Contatos + Inbox (UI nova) | Pronto (versão enxuta) |
-| WhatsApp Settings (WAHA) | Pronto |
-| R2 upload API | Pronto |
-| SSE realtime | Pronto |
-| send-message → WAHA | Pronto |
-| Templates locais API | Pronto (sync Meta = 410) |
-| Pipelines / Broadcasts / Automations UIs | **CRUD operacional** (Prisma session APIs) |
-| Flows UI + engine MVP | **Keyword / first_inbound → send_message** via WAHA; cron com `AUTOMATION_CRON_SECRET` |
-| Automations / Broadcasts engines | Stubs — envio em massa e `runAutomationsForTrigger` ainda não ligados |
-| Public API `/api/v1` | Shell autenticado — expandir queries |
-| Pacotes `@supabase/*` | Removidos |
-
-## Observações
-
-- Sessão Auth.js usa **JWT** (exigência do provider Credentials); usuários ficam no Postgres.
-- Model CRM tenant = `Tenant` → tabela `accounts`; Auth.js OAuth = `Account` → `auth_accounts`.
-- `tsc --noEmit` está limpo (testes `*.test.ts` excluídos do `tsconfig` temporariamente).
-- Spec: `docs/superpowers/specs/2026-07-15-prisma-waha-migration-design.md`
-- Plano: `docs/superpowers/plans/2026-07-15-prisma-waha-migration.md`
-- Deploy Dokploy: `docs/dokploy.md`
+Ver [dokploy.md](./dokploy.md).

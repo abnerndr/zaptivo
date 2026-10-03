@@ -15,12 +15,9 @@ jobs:
     name: Lint, typecheck, test, build
     runs-on: ubuntu-latest
     env:
-      NEXT_PUBLIC_SUPABASE_URL: https://ci.example.supabase.co
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-dummy-anon-key
-      NEXT_PUBLIC_API_URL: http://localhost:4000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
       DATABASE_URL: postgresql://build:build@127.0.0.1:5432/build?schema=public
       ENCRYPTION_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
-      META_APP_SECRET: 'ci-dummy-meta-secret'
       AUTH_SECRET: 'ci-dummy-auth-secret'
     steps:
       - uses: actions/checkout@v7
@@ -40,14 +37,11 @@ jobs:
       - name: Generate Prisma client
         run: pnpm db:generate
 
-      - name: Build shared packages
-        run: pnpm --filter @wacrm/shared build && pnpm --filter @wacrm/database build
-
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Test (web)
-        run: pnpm --filter @wacrm/web test
+      - name: Test
+        run: pnpm test
 
       - name: Build
         run: pnpm build

@@ -1,0 +1,42 @@
+---
+description: Harness Zaptivo — Memory, ADRs e session-log obrigatórios para não regressar arquitetura
+alwaysApply: true
+---
+
+# Zaptivo harness (sempre ativo)
+
+## Antes de mudanças estruturais
+
+1. Ler `.claude/memory/MEMORY.md`
+2. Ler `.claude/adr/000-index.md` e qualquer ADR tocado pela tarefa
+3. Se a proposta **contradiz** um ADR Aceito → parar, explicar o conflito, ou propor ADR novo que o substitua (não ignorar)
+
+## Anti-padrões (proibidos sem ADR substituto)
+
+- Recriar Nest / `apps/api` / Turborepo / `packages/*` de app
+- Renomear domínio para `src/server` (usar `src/domain`)
+- Trazer Supabase client/stubs ou schema via SQL legado
+- Segundo serviço/Dockerfile só para API HTTP
+
+## Depois de trabalho relevante (IA)
+
+Fazer **append no topo** de `docs/session-log.md` com:
+
+```markdown
+## YYYY-MM-DD — título curto
+
+### O que foi feito
+### Por que
+### Onde revisar
+### Impacto
+- [ ] Frontend / Backend / DB / Deploy / DX
+
+### Risco / Atenção
+### Como validar
+```
+
+Se a decisão for arquitetural duradoura: criar/atualizar ADR em `.claude/adr/` e linha no `000-index.md`, e apontar em `.claude/memory/MEMORY.md`.
+
+## Não apagar
+
+Não remover `.claude/memory/`, `.claude/adr/`, `docs/session-log.md` ou esta rule sem pedido explícito do humano.

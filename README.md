@@ -36,6 +36,8 @@ pnpm dev               # http://localhost:3000
 - [Runbook local](./docs/runbook-local.md)
 - [Deploy Dokploy](./docs/dokploy.md)
 - [API pública `/api/v1`](./docs/public-api.md)
+- [Session log (IA)](./docs/session-log.md)
+- [Memory](./.claude/memory/MEMORY.md) · [ADRs](./.claude/adr/000-index.md)
 
 ## Scripts
 

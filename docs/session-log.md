@@ -5,6 +5,32 @@ Não edite entradas antigas — só acrescente no topo (mais recente primeiro).
 
 ---
 
+## 2026-10-04 — Fix deploy: dependência `shadcn` faltando
+
+### O que foi feito
+- Adicionou `shadcn@^4.11.0` ao `package.json` da raiz (perdido no flatten)
+- Validou `pnpm build` local com sucesso
+
+### Por que
+- Dokploy falhava em `Can't resolve 'shadcn/tailwind.css'` — import em `globals.css` sem o pacote
+
+### Onde revisar
+- `package.json` / `pnpm-lock.yaml`
+- `src/app/globals.css` (`@import "shadcn/tailwind.css"`)
+
+### Impacto
+- [x] Frontend / Build / Deploy
+- [ ] Backend / DB
+
+### Risco / Atenção
+- Precisa commit + push para o redeploy no Dokploy pegar o lockfile
+
+### Como validar
+- `pnpm build` (já OK localmente)
+- Redeploy Dokploy após push
+
+---
+
 ## 2026-10-03 — Unificação Next + flatten + harness
 
 ### O que foi feito

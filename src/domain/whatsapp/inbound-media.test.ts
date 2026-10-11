@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { extensionForMime, inboundMediaKey } from './inbound-media'
+import {
+  extensionForMime,
+  inboundMediaKey,
+  shouldSendWahaKey,
+} from './inbound-media'
 
 describe('inbound media path', () => {
   it('maps common mimes to extensions', () => {
@@ -16,5 +20,31 @@ describe('inbound media path', () => {
     expect(inboundMediaKey('acc-1', 'msg-1', 'image/jpeg')).toBe(
       'chat-media/account-acc-1/msg-1.jpg',
     )
+  })
+})
+
+describe('shouldSendWahaKey', () => {
+  const base = 'https://waha.example'
+
+  it('sends the key to the same origin', () => {
+    expect(shouldSendWahaKey('https://waha.example/api/files/1', base)).toBe(true)
+  })
+
+  it('does not send the key to another origin', () => {
+    expect(shouldSendWahaKey('https://evil.example/api/files/1', base)).toBe(false)
+  })
+
+  it('does not send the key without a base url', () => {
+    expect(shouldSendWahaKey('https://waha.example/api/files/1', undefined)).toBe(
+      false,
+    )
+  })
+
+  it('resolves relative paths against the base', () => {
+    expect(shouldSendWahaKey('/api/files/1', base)).toBe(true)
+  })
+
+  it('rejects invalid urls', () => {
+    expect(shouldSendWahaKey('http://', base)).toBe(false)
   })
 })

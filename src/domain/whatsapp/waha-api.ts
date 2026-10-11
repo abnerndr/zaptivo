@@ -4,6 +4,8 @@
  * @see https://waha.devlike.pro/docs/integrations/javascript/
  */
 
+import { shouldSendWahaKey } from '@/domain/whatsapp/inbound-media'
+
 export type WahaSessionStatus =
   | 'STOPPED'
   | 'STARTING'
@@ -307,7 +309,16 @@ export async function downloadWahaMedia(args: {
   url: string
   session: string
 }): Promise<{ body: Buffer; contentType: string }> {
-  const res = await fetch(args.url, { headers: headers({ Accept: '*/*' }) })
+  const base = process.env.WAHA_BASE_URL
+  // Never leak X-Api-Key to a foreign host taken from a webhook payload.
+  const sendKey = shouldSendWahaKey(args.url, base)
+  const url =
+    args.url.startsWith('http') || !base
+      ? args.url
+      : new URL(args.url, base).toString()
+  const res = await fetch(url, {
+    headers: sendKey ? headers({ Accept: '*/*' }) : { Accept: '*/*' },
+  })
   if (!res.ok) throw new Error(`WAHA media ${res.status}`)
   const contentType =
     res.headers.get('content-type')?.split(';')[0]?.trim() ||

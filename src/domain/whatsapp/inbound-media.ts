@@ -28,6 +28,26 @@ export function inboundMediaKey(
 }
 
 /**
+ * The WAHA API key may only go to WAHA itself: true when the media url
+ * (absolute, or relative to the base) has the same origin as `baseUrl`.
+ */
+export function shouldSendWahaKey(
+  mediaUrl: string,
+  baseUrl: string | undefined,
+): boolean {
+  if (!baseUrl) return false
+  try {
+    const base = new URL(baseUrl)
+    const target = mediaUrl.startsWith('http')
+      ? new URL(mediaUrl)
+      : new URL(mediaUrl, base)
+    return target.origin === base.origin
+  } catch {
+    return false
+  }
+}
+
+/**
  * Downloads inbound media from WAHA, stores it in R2 and tells the client
  * the final URL. Runs after the bubble was already shown.
  */

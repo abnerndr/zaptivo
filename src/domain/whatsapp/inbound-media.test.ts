@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   extensionForMime,
   inboundMediaKey,
+  safePublicContentType,
   shouldSendWahaKey,
 } from './inbound-media'
 
@@ -46,5 +47,17 @@ describe('shouldSendWahaKey', () => {
 
   it('rejects invalid urls', () => {
     expect(shouldSendWahaKey('http://', base)).toBe(false)
+  })
+})
+
+describe('safePublicContentType', () => {
+  it('keeps allowed types', () => {
+    expect(safePublicContentType('image/jpeg')).toBe('image/jpeg')
+    expect(safePublicContentType('audio/ogg; codecs=opus')).toBe('audio/ogg')
+  })
+
+  it('turns anything else into octet-stream', () => {
+    expect(safePublicContentType('text/html')).toBe('application/octet-stream')
+    expect(safePublicContentType(null)).toBe('application/octet-stream')
   })
 })

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { dispatchTiming, selectContactIds } from './select'
+import {
+  MAX_DISPATCH_RECIPIENTS,
+  dispatchTiming,
+  selectContactIds,
+} from './select'
 
 const contacts = [
   { id: 'a', typeId: 'lead' },
@@ -52,5 +56,11 @@ describe('dispatchTiming', () => {
     const result = dispatchTiming('2026-10-11T12:00:00.000Z', now)
     expect(result.status).toBe('scheduled')
     expect(result.runAt.toISOString()).toBe('2026-10-11T12:00:00.000Z')
+  })
+})
+
+describe('MAX_DISPATCH_RECIPIENTS', () => {
+  it('is 50', () => {
+    expect(MAX_DISPATCH_RECIPIENTS).toBe(50)
   })
 })

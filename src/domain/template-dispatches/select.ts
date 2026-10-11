@@ -1,3 +1,5 @@
+export const MAX_DISPATCH_RECIPIENTS = 50
+
 export function selectContactIds(args: {
   contacts: Array<{ id: string; typeId: string | null }>
   selectedIds: string[]

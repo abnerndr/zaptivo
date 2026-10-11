@@ -87,12 +87,19 @@ export async function POST(req: Request) {
     if (!body.phone) {
       return NextResponse.json({ error: 'phone required' }, { status: 400 })
     }
+    const digits = String(body.phone).replace(/\D/g, '')
+    if (!digits) {
+      return NextResponse.json({ error: 'phone required' }, { status: 400 })
+    }
+    const name = body.name?.trim() ? body.name.trim() : null
     const contact = await prisma.contact.create({
       data: {
         accountId: ctx.accountId,
         userId: ctx.userId,
-        phone: body.phone,
-        name: body.name ?? null,
+        phone: digits,
+        phoneNormalized: digits,
+        name,
+        nameLocked: name !== null,
         email: body.email ?? null,
         company: body.company ?? null,
       },

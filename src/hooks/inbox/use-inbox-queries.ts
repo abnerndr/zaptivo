@@ -7,7 +7,6 @@ import {
   applyConversationPreview,
   applyMediaUrl,
   applyMessageInsert,
-  applyMessageMove,
 } from '@/hooks/inbox/apply-realtime'
 import {
   type InboxConversation,
@@ -91,11 +90,9 @@ export function useInboxRealtime(
     ) {
       const from = payload.movedFromConversationId
       const to = payload.movedToConversationId
-      for (const id of [from, to]) {
-        client.setQueryData<InboxMessage[]>(inboxKeys.messages(id), (old) =>
-          old ? applyMessageMove(old, payload, id) : old,
-        )
-      }
+      // The notify carries only ids: refetch both threads, never invent a bubble.
+      void client.invalidateQueries({ queryKey: inboxKeys.messages(from) })
+      void client.invalidateQueries({ queryKey: inboxKeys.messages(to) })
       movedRef.current?.(from, to)
       return
     }

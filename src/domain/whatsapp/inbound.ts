@@ -289,6 +289,9 @@ async function settleContactIdentity(args: {
   return { contactId, conversationId: survivingConversationId, phone }
 }
 
+/** `${accountId}:${waMessageId}` keys currently being inserted. */
+const inFlightMessageIds = new Set<string>()
+
 /**
  * Persist a WAHA `message` / `message.any` event into contact/conversation/message.
  */
@@ -399,19 +402,50 @@ export async function ingestWahaMessage(args: {
     }
   }
 
-  const message = await prisma.message.create({
-    data: {
+  // Reserve the id so a concurrent message/message.any for the same WhatsApp
+  // message cannot insert a second row.
+  const reserveKey = waMessageId ? `${accountId}:${waMessageId}` : null
+  if (reserveKey) {
+    if (inFlightMessageIds.has(reserveKey)) {
+      return { ok: true, reason: 'duplicate', conversationId }
+    }
+    inFlightMessageIds.add(reserveKey)
+  }
+
+  let message
+  try {
+    const afterReserveDup = await findExistingMessage({
+      accountId,
       conversationId,
-      senderType: fromMe ? 'agent' : 'customer',
-      contentType,
-      contentText: text,
-      // WAHA's internal url is not the final one: settleInboundMedia stores it in R2.
-      mediaUrl: payload.hasMedia ? null : (payload.media?.url ?? null),
-      messageId: waMessageId,
-      status: fromMe ? 'sent' : 'delivered',
+      waMessageId,
+      fromMe,
+      text,
       createdAt,
-    },
-  })
+    })
+    if (afterReserveDup) {
+      return {
+        ok: true,
+        reason: 'duplicate',
+        conversationId: afterReserveDup.conversationId,
+      }
+    }
+
+    message = await prisma.message.create({
+      data: {
+        conversationId,
+        senderType: fromMe ? 'agent' : 'customer',
+        contentType,
+        contentText: text,
+        // WAHA's internal url is not the final one: settleInboundMedia stores it in R2.
+        mediaUrl: payload.hasMedia ? null : (payload.media?.url ?? null),
+        messageId: waMessageId,
+        status: fromMe ? 'sent' : 'delivered',
+        createdAt,
+      },
+    })
+  } finally {
+    if (reserveKey) inFlightMessageIds.delete(reserveKey)
+  }
 
   await prisma.conversation.update({
     where: { id: conversationId },

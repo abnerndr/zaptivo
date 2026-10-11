@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/domain/db/prisma'
 import { requireSessionAccount } from '@/domain/auth/context'
-import { dispatchTiming, selectContactIds } from '@/domain/template-dispatches/select'
+import {
+  MAX_DISPATCH_RECIPIENTS,
+  dispatchTiming,
+  selectContactIds,
+} from '@/domain/template-dispatches/select'
 import { runDispatch } from '@/domain/template-dispatches/run'
 
 export async function GET() {
@@ -74,6 +78,10 @@ export async function POST(req: Request) {
     ]
     if (ids.length === 0) {
       return NextResponse.json({ error: 'Nenhum contato selecionado' }, { status: 400 })
+    }
+
+    if (ids.length > MAX_DISPATCH_RECIPIENTS) {
+      return NextResponse.json({ error: 'Lista grande demais' }, { status: 400 })
     }
 
     const timing = dispatchTiming(runAt, new Date())

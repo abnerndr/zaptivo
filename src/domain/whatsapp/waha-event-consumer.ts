@@ -98,6 +98,16 @@ async function handleEvent(row: SessionRow, parsed: ParsedEvent) {
   }
 }
 
+const sessionQueues = new Map<string, Promise<void>>()
+
+/** Handle events of one session one at a time (message + message.any race). */
+function enqueueEvent(row: SessionRow, parsed: ParsedEvent): Promise<void> {
+  const previous = sessionQueues.get(row.wahaSession) ?? Promise.resolve()
+  const next = previous.then(() => handleEvent(row, parsed))
+  sessionQueues.set(row.wahaSession, next)
+  return next
+}
+
 function sleep(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms))
 }
@@ -118,7 +128,7 @@ function connectWebSocket(
     ws.onopen = () => onOpen()
     ws.onmessage = (msg: MessageEvent) => {
       const parsed = parseWahaEventData(String(msg.data))
-      if (parsed) void handleEvent(row, parsed)
+      if (parsed) void enqueueEvent(row, parsed)
     }
     ws.onerror = () => {
       // onclose sempre segue; o reconnect acontece lá
@@ -153,7 +163,7 @@ async function connectSse(row: SessionRow, onOpen: () => void): Promise<void> {
         .join('\n')
       if (!data) continue
       const parsed = parseWahaEventData(data)
-      if (parsed) void handleEvent(row, parsed)
+      if (parsed) void enqueueEvent(row, parsed)
     }
   }
 }

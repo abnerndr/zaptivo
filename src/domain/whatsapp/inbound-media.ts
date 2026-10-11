@@ -19,6 +19,22 @@ export function extensionForMime(mimetype: string | null): string {
   return EXTENSIONS[base] ?? 'bin'
 }
 
+const SAFE_PUBLIC_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'audio/ogg',
+  'audio/mpeg',
+  'video/mp4',
+  'application/pdf',
+])
+
+/** Only known-safe types are served as-is from the public bucket. */
+export function safePublicContentType(mime: string | null): string {
+  const base = mime?.split(';')[0]?.trim().toLowerCase() ?? ''
+  return SAFE_PUBLIC_TYPES.has(base) ? base : 'application/octet-stream'
+}
+
 export function inboundMediaKey(
   accountId: string,
   messageId: string,
@@ -69,7 +85,7 @@ export async function settleInboundMedia(args: {
   const publicUrl = await uploadObject({
     key,
     body: file.body,
-    contentType: mime,
+    contentType: safePublicContentType(mime),
   })
   const updated = await prisma.message.update({
     where: { id: args.messageId },

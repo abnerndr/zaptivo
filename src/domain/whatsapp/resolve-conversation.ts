@@ -1,4 +1,5 @@
 import { prisma } from '@/domain/db/prisma'
+import { preferLockedName } from '@/domain/contacts/name-lock'
 import { sanitizePhoneForMeta, phonesMatch } from '@/domain/whatsapp/phone-utils'
 import { isLikelyLid } from '@/domain/whatsapp/format-phone'
 
@@ -253,6 +254,7 @@ async function mergeDuplicateContacts(accountId: string): Promise<number> {
       phone: true,
       phoneNormalized: true,
       name: true,
+      nameLocked: true,
       _count: { select: { conversations: true } },
     },
   })
@@ -296,12 +298,21 @@ async function mergeDuplicateContacts(accountId: string): Promise<number> {
         where: { contactId: dupe.id, accountId },
         data: { contactId: keep.id },
       })
-      if ((!keep.name || !keep.name.trim()) && dupe.name?.trim()) {
+      const chosen = preferLockedName({
+        current: { name: dupe.name, nameLocked: dupe.nameLocked },
+        survivor: { name: keep.name, nameLocked: keep.nameLocked },
+        pushName: null,
+      })
+      if (
+        chosen.name !== keep.name ||
+        chosen.nameLocked !== keep.nameLocked
+      ) {
         await prisma.contact.update({
           where: { id: keep.id },
-          data: { name: dupe.name },
+          data: { name: chosen.name, nameLocked: chosen.nameLocked },
         })
-        keep.name = dupe.name
+        keep.name = chosen.name
+        keep.nameLocked = chosen.nameLocked
       }
       // Prefer longer / more complete phone on keeper
       const keepPhone = keep.phoneNormalized || keep.phone

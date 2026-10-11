@@ -15,6 +15,11 @@ import {
 } from '@/components/ui/table'
 import { Loader2, Plus, Search } from 'lucide-react'
 import { useCan } from '@/hooks/use-can'
+import {
+  ContactTypePanel,
+  ContactTypeSelect,
+  type ContactTypeOption,
+} from '@/components/contacts/contact-type-panel'
 
 type ContactRow = {
   id: string
@@ -23,11 +28,13 @@ type ContactRow = {
   email: string | null
   company: string | null
   tags?: Array<{ id: string; name: string; color: string }>
+  type: { id: string; name: string; color: string } | null
 }
 
 export default function ContactsPage() {
   const canEdit = useCan('send-messages')
   const [contacts, setContacts] = useState<ContactRow[]>([])
+  const [types, setTypes] = useState<ContactTypeOption[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)
@@ -61,6 +68,10 @@ export default function ContactsPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  const handleTypesLoaded = useCallback((next: ContactTypeOption[]) => {
+    setTypes(next)
+  }, [])
 
   const create = async () => {
     if (!phone.trim()) {
@@ -98,6 +109,12 @@ export default function ContactsPage() {
         <h1 className="text-2xl font-semibold">Contatos</h1>
         <span className="text-sm text-muted-foreground">{totalCount} total</span>
       </div>
+
+      <ContactTypePanel
+        canEdit={canEdit}
+        onTypesLoaded={handleTypesLoaded}
+        onChange={() => void load()}
+      />
 
       <div className="flex flex-wrap gap-2">
         <div className="relative min-w-[200px] flex-1">
@@ -143,6 +160,7 @@ export default function ContactsPage() {
               <TableHead>Nome</TableHead>
               <TableHead>Telefone</TableHead>
               <TableHead>E-mail</TableHead>
+              <TableHead>Tipo</TableHead>
               <TableHead />
             </TableRow>
           </TableHeader>
@@ -152,6 +170,15 @@ export default function ContactsPage() {
                 <TableCell>{c.name || '—'}</TableCell>
                 <TableCell>{c.phone}</TableCell>
                 <TableCell>{c.email || '—'}</TableCell>
+                <TableCell>
+                  <ContactTypeSelect
+                    contactId={c.id}
+                    value={c.type?.id ?? null}
+                    types={types}
+                    disabled={!canEdit}
+                    onChange={() => void load()}
+                  />
+                </TableCell>
                 <TableCell className="text-right">
                   {canEdit && (
                     <Button

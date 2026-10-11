@@ -114,6 +114,7 @@ model Tenant {
   aiKnowledgeChunks     AiKnowledgeChunk[]
   aiUsageLogs           AiUsageLog[]
   quickReplies          QuickReply[]
+  templateDispatches    TemplateDispatch[]
 
   @@unique([ownerUserId])
   @@map("accounts")
@@ -247,6 +248,7 @@ model Contact {
   notes         ContactNote[]
   conversations Conversation[]
   deals         Deal[]
+  templateDispatchRecipients TemplateDispatchRecipient[]
 
   @@index([accountId])
   @@index([phone])
@@ -458,10 +460,41 @@ model MessageTemplate {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  account Tenant @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  account    Tenant             @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  dispatches TemplateDispatch[]
 
   @@unique([accountId, name, language])
   @@map("message_templates")
+}
+
+model TemplateDispatch {
+  id         String   @id @default(uuid()) @db.Uuid
+  accountId  String   @map("account_id") @db.Uuid
+  templateId String   @map("template_id") @db.Uuid
+  status     String   @default("queued") // queued | scheduled | sending | sent | failed
+  runAt      DateTime @map("run_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  account    Tenant                       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  template   MessageTemplate              @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  recipients TemplateDispatchRecipient[]
+
+  @@index([status, runAt])
+  @@map("template_dispatches")
+}
+
+model TemplateDispatchRecipient {
+  id           String  @id @default(uuid()) @db.Uuid
+  dispatchId   String  @map("dispatch_id") @db.Uuid
+  contactId    String  @map("contact_id") @db.Uuid
+  status       String  @default("pending") // pending | sent | failed
+  errorMessage String? @map("error_message")
+
+  dispatch TemplateDispatch @relation(fields: [dispatchId], references: [id], onDelete: Cascade)
+  contact  Contact          @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([dispatchId, contactId])
+  @@map("template_dispatch_recipients")
 }
 
 // ─── Pipelines ───────────────────────────────────────────────

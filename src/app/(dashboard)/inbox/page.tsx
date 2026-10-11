@@ -35,6 +35,7 @@ import {
 } from '@/domain/whatsapp/format-phone'
 import { Loader2, RefreshCw, UserPlus, UserRoundPen } from 'lucide-react'
 import { toast } from 'sonner'
+import { messageBubble } from '@/domain/inbox/message-bubble'
 
 function formatMessageTime(iso: string): string {
   const d = new Date(iso)
@@ -427,6 +428,7 @@ export default function InboxPage() {
                 {messages.map((m) => {
                   const outgoing =
                     m.sender_type === 'agent' || m.sender_type === 'bot'
+                  const bubble = messageBubble(m)
                   return (
                     <div
                       key={m.id}
@@ -441,7 +443,36 @@ export default function InboxPage() {
                             : 'border border-border bg-card text-card-foreground'
                         }`}
                       >
-                        {m.content_text || `[${m.content_type}]`}
+                        {bubble.kind === 'image' ? (
+                          <>
+                            <img
+                              src={bubble.url!}
+                              alt={bubble.text ?? 'imagem'}
+                              className="max-h-64 rounded-md"
+                            />
+                            {bubble.text && bubble.text !== '[image]' ? (
+                              <p className="mt-2">{bubble.text}</p>
+                            ) : null}
+                          </>
+                        ) : bubble.kind === 'audio' ? (
+                          <audio controls src={bubble.url!} />
+                        ) : bubble.kind === 'video' ? (
+                          <video
+                            controls
+                            src={bubble.url!}
+                            className="max-h-64 rounded-md"
+                          />
+                        ) : bubble.kind === 'document' ? (
+                          <a
+                            href={bubble.url!}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            {bubble.text || 'documento'}
+                          </a>
+                        ) : (
+                          bubble.text || `[${m.content_type}]`
+                        )}
                       </div>
                       <div className="flex items-center gap-1 px-1">
                         <time

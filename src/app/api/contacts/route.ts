@@ -3,6 +3,8 @@ import { prisma } from '@/domain/db/prisma'
 import { requireSessionAccount } from '@/domain/auth/context'
 import { Prisma } from '@prisma/client'
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export async function GET(req: Request) {
   try {
     const ctx = await requireSessionAccount()
@@ -11,6 +13,10 @@ export async function GET(req: Request) {
     const page = Math.max(0, Number(url.searchParams.get('page') ?? 0))
     const pageSize = Math.min(100, Math.max(1, Number(url.searchParams.get('pageSize') ?? 25)))
     const tagIds = url.searchParams.getAll('tagId')
+    const typeId = url.searchParams.get('typeId')?.trim() ?? ''
+    if (typeId && !UUID_RE.test(typeId)) {
+      return NextResponse.json({ error: 'Tipo inválido' }, { status: 400 })
+    }
 
     const where: Prisma.ContactWhereInput = {
       accountId: ctx.accountId,
@@ -26,6 +32,7 @@ export async function GET(req: Request) {
       ...(tagIds.length
         ? { contactTags: { some: { tagId: { in: tagIds } } } }
         : {}),
+      ...(typeId ? { typeId } : {}),
     }
 
     const [totalCount, rows] = await Promise.all([
@@ -37,6 +44,7 @@ export async function GET(req: Request) {
         take: pageSize,
         include: {
           contactTags: { include: { tag: true } },
+          contactType: { select: { id: true, name: true, color: true } },
         },
       }),
     ])
@@ -51,6 +59,7 @@ export async function GET(req: Request) {
       account_id: c.accountId,
       created_at: c.createdAt.toISOString(),
       updated_at: c.updatedAt.toISOString(),
+      type: c.contactType,
       tags: c.contactTags.map((ct) => ({
         id: ct.tag.id,
         name: ct.tag.name,

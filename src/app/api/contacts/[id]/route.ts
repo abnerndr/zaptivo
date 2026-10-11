@@ -4,6 +4,8 @@ import { requireSessionAccount } from '@/domain/auth/context'
 
 type Ctx = { params: Promise<{ id: string }> }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export async function PATCH(req: Request, ctx: Ctx) {
   try {
     const session = await requireSessionAccount()
@@ -15,9 +17,30 @@ export async function PATCH(req: Request, ctx: Ctx) {
     if (!existing) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
+    let typeIdUpdate: { typeId: string | null } | Record<string, never> = {}
+    if ('typeId' in body) {
+      if (body.typeId === null) {
+        typeIdUpdate = { typeId: null }
+      } else if (
+        typeof body.typeId === 'string' &&
+        UUID_RE.test(body.typeId)
+      ) {
+        const type = await prisma.contactType.findFirst({
+          where: { id: body.typeId, accountId: session.accountId },
+          select: { id: true },
+        })
+        if (!type) {
+          return NextResponse.json({ error: 'Tipo inválido' }, { status: 400 })
+        }
+        typeIdUpdate = { typeId: type.id }
+      } else {
+        return NextResponse.json({ error: 'Tipo inválido' }, { status: 400 })
+      }
+    }
     const updated = await prisma.contact.update({
       where: { id },
       data: {
+        ...typeIdUpdate,
         ...(typeof body.name === 'string'
           ? {
               name: body.name.trim() || null,
@@ -46,6 +69,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
       email: updated.email,
       company: updated.company,
       avatar_url: updated.avatarUrl,
+      type_id: updated.typeId,
     })
   } catch (err) {
     if (err instanceof Response) return err

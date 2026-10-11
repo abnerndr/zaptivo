@@ -1,4 +1,3 @@
-◇ injected env (28) from .env // tip: ◈ encrypted .env [www.dotenvx.com]
 -- CreateTable
 CREATE TABLE "template_dispatches" (
     "id" UUID NOT NULL,

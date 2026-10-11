@@ -28,7 +28,10 @@ export async function GET(req: Request) {
 
   let connectionString: string
   try {
-    connectionString = listenConnectionString(process.env)
+    connectionString = listenConnectionString({
+      DIRECT_DATABASE_URL: process.env.DIRECT_DATABASE_URL,
+      DATABASE_URL: process.env.DATABASE_URL,
+    })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'DATABASE_URL missing'
     return new Response(message, { status: 500 })

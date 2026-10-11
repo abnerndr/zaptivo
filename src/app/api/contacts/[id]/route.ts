@@ -19,7 +19,10 @@ export async function PATCH(req: Request, ctx: Ctx) {
       where: { id },
       data: {
         ...(typeof body.name === 'string'
-          ? { name: body.name.trim() || null }
+          ? {
+              name: body.name.trim() || null,
+              nameLocked: Boolean(body.name.trim()),
+            }
           : {}),
         ...(typeof body.phone === 'string'
           ? {
@@ -38,6 +41,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     return NextResponse.json({
       id: updated.id,
       name: updated.name,
+      name_locked: updated.nameLocked,
       phone: updated.phone,
       email: updated.email,
       company: updated.company,

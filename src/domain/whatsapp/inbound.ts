@@ -351,6 +351,7 @@ export async function ingestWahaMessage(args: {
     await prisma.contact.updateMany({
       where: {
         accountId,
+        nameLocked: false,
         AND: [
           { OR: [{ phone }, { phoneNormalized: phone }] },
           { OR: [{ name: null }, { name: '' }] },

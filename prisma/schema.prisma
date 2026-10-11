@@ -231,6 +231,7 @@ model Contact {
   /** WhatsApp Linked ID digits (without @lid) — maps inbound @lid → this contact */
   whatsappLid     String?  @map("whatsapp_lid")
   name            String?
+  nameLocked      Boolean  @default(false) @map("name_locked")
   email           String?
   company         String?
   avatarUrl       String?  @map("avatar_url")

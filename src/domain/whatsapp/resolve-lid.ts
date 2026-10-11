@@ -1,4 +1,5 @@
 import { prisma } from '@/domain/db/prisma'
+import { preferLockedName } from '@/domain/contacts/name-lock'
 import {
   getWahaContact,
   resolveLidToPhone,
@@ -229,12 +230,15 @@ export async function upgradeContactToPhone(args: {
       where: { contactId: current.id, accountId: args.accountId },
       data: { contactId: other.id },
     })
-    if ((!other.name || !other.name.trim()) && (args.name || current.name)) {
-      await prisma.contact.update({
-        where: { id: other.id },
-        data: { name: args.name || current.name },
-      })
-    }
+    const chosen = preferLockedName({
+      current: { name: current.name, nameLocked: current.nameLocked },
+      survivor: { name: other.name, nameLocked: other.nameLocked },
+      pushName: args.name ?? null,
+    })
+    await prisma.contact.update({
+      where: { id: other.id },
+      data: { name: chosen.name, nameLocked: chosen.nameLocked },
+    })
     await mergeOpenConversationsForContact({
       accountId: args.accountId,
       contactId: other.id,
@@ -257,14 +261,18 @@ export async function upgradeContactToPhone(args: {
     return { contactId: other.id }
   }
 
+  const chosenSelf = preferLockedName({
+    current: { name: null, nameLocked: false },
+    survivor: { name: current.name, nameLocked: current.nameLocked },
+    pushName: args.name ?? null,
+  })
   await prisma.contact.update({
     where: { id: current.id },
     data: {
       phone,
       phoneNormalized: phone,
-      ...((!current.name || !current.name.trim()) && args.name
-        ? { name: args.name }
-        : {}),
+      name: chosenSelf.name,
+      nameLocked: chosenSelf.nameLocked,
       ...(args.lid || current.whatsappLid
         ? { whatsappLid: lidDigits(args.lid || current.whatsappLid) }
         : {}),

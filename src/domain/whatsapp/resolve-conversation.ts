@@ -121,41 +121,13 @@ async function findOrCreateContact(args: {
     },
   })
   if (exact) {
-    if (contactName && (!exact.name || !exact.name.trim())) {
+    if (contactName && !exact.nameLocked && (!exact.name || !exact.name.trim())) {
       await prisma.contact.update({
         where: { id: exact.id },
         data: { name: contactName },
       })
     }
     return exact.id
-  }
-
-  // Fuzzy match (trunk prefix / missing country code) before creating
-  const candidates = await prisma.contact.findMany({
-    where: { accountId },
-    select: { id: true, phone: true, phoneNormalized: true, name: true },
-    take: 500,
-  })
-  const fuzzy = candidates.find(
-    (c) =>
-      phonesMatch(c.phone, phone) ||
-      (c.phoneNormalized ? phonesMatch(c.phoneNormalized, phone) : false),
-  )
-  if (fuzzy) {
-    // Normalize stored phone to the resolved form when we have a better number
-    if (phone.length >= (fuzzy.phone?.length ?? 0)) {
-      await prisma.contact.update({
-        where: { id: fuzzy.id },
-        data: {
-          phone,
-          phoneNormalized: phone,
-          ...((!fuzzy.name || !fuzzy.name.trim()) && contactName
-            ? { name: contactName }
-            : {}),
-        },
-      })
-    }
-    return fuzzy.id
   }
 
   const contact = await prisma.contact.create({

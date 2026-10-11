@@ -9,23 +9,20 @@ import { useTotalUnread } from "@/hooks/use-total-unread";
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import {
   Bell,
-  Bot,
   Crown,
-  GitBranch,
   LayoutDashboard,
   LogOut,
   MessageSquare,
-  Radio,
   Settings,
   Shield,
   User,
   UserCog,
   Users,
   UsersRound,
-  Workflow,
   X,
   Zap,
 } from "lucide-react";
+import { mainNavHrefs } from "@/components/layout/nav-items";
 import type { AccountRole } from "@/domain/auth/roles";
 
 // Per-role chip metadata used in the sidebar's account strip + the
@@ -89,17 +86,17 @@ interface NavItem {
   beta?: boolean;
 }
 
-const navItems: NavItem[] = [
+const allNavItems: NavItem[] = [
   { href: "/dashboard", labelKey: "dashboard", icon: LayoutDashboard },
   { href: "/inbox", labelKey: "inbox", icon: MessageSquare },
   { href: "/notifications", labelKey: "notifications", icon: Bell },
   { href: "/contacts", labelKey: "contacts", icon: Users },
-  { href: "/pipelines", labelKey: "pipelines", icon: GitBranch },
-  { href: "/broadcasts", labelKey: "broadcasts", icon: Radio },
   { href: "/automations", labelKey: "automations", icon: Zap },
-  { href: "/flows", labelKey: "flows", icon: Workflow, beta: true },
-  { href: "/agents", labelKey: "aiAgents", icon: Bot },
 ];
+
+const navItems = mainNavHrefs()
+  .map((href) => allNavItems.find((item) => item.href === href))
+  .filter((item): item is NavItem => item != null);
 
 const bottomNavItems = [
   { href: "/settings", labelKey: "settings", icon: Settings },

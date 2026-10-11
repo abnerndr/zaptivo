@@ -1,14 +1,9 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import type { RealtimePayload } from '@/domain/realtime/payload'
 
-export type RealtimePayload = {
-  type?: string
-  table?: string
-  op?: string
-  id?: string
-  accountId?: string
-}
+export type { RealtimePayload }
 
 /**
  * Subscribe to account-scoped SSE (`/api/realtime/stream`).
@@ -36,6 +31,7 @@ export function useRealtime(
     let stopped = false
     let retryMs = 1000
     let retryTimer: ReturnType<typeof setTimeout> | null = null
+    let hasOpenedBefore = false
 
     const connect = () => {
       if (stopped) return
@@ -44,6 +40,10 @@ export function useRealtime(
       )
       es.onopen = () => {
         retryMs = 1000
+        if (hasOpenedBefore) {
+          handlerRef.current({ type: 'reconnect' })
+        }
+        hasOpenedBefore = true
         setConnected(true)
       }
       es.onmessage = (ev) => {

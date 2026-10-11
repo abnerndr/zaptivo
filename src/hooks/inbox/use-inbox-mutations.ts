@@ -107,14 +107,22 @@ export function useSendMessage() {
       conversationId: string
       content: string
       tempId: string
+      messageType?: 'text' | 'image' | 'audio' | 'video' | 'document'
+      mediaUrl?: string
+      filename?: string
     }) => {
+      if (!args.content.trim() && !args.mediaUrl) {
+        throw new Error('Mensagem vazia')
+      }
       const res = await apiFetch('/api/whatsapp/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           conversation_id: args.conversationId,
-          message_type: 'text',
-          content_text: args.content,
+          message_type: args.messageType ?? 'text',
+          content_text: args.content || null,
+          media_url: args.mediaUrl ?? null,
+          filename: args.filename ?? null,
         }),
       })
       const data = (await res.json().catch(() => ({}))) as {
@@ -130,7 +138,14 @@ export function useSendMessage() {
       }
       return data
     },
-    onMutate: async ({ conversationId, content, tempId }) => {
+    onMutate: async ({
+      conversationId,
+      content,
+      tempId,
+      messageType,
+      mediaUrl,
+      filename,
+    }) => {
       await queryClient.cancelQueries({
         queryKey: inboxKeys.messages(conversationId),
       })
@@ -140,8 +155,9 @@ export function useSendMessage() {
       const optimistic: InboxMessage = {
         id: tempId,
         sender_type: 'agent',
-        content_text: content,
-        content_type: 'text',
+        content_text: content || null,
+        content_type: messageType ?? 'text',
+        media_url: mediaUrl ?? null,
         status: 'sending',
         created_at: new Date().toISOString(),
       }
@@ -154,7 +170,7 @@ export function useSendMessage() {
         (list) =>
           list?.map((c) =>
             c.id === conversationId
-              ? { ...c, last_message_text: content }
+              ? { ...c, last_message_text: content || filename || null }
               : c,
           ),
       )
@@ -166,8 +182,8 @@ export function useSendMessage() {
         (list) =>
           confirmOptimisticMessage(list, vars.tempId, {
             id: data.messageId ?? vars.tempId,
-            contentText: data.contentText ?? vars.content,
-            contentType: data.contentType ?? 'text',
+            contentText: data.contentText ?? (vars.content || null),
+            contentType: data.contentType ?? vars.messageType ?? 'text',
             status: data.status ?? 'sent',
             createdAt: data.createdAt ?? new Date().toISOString(),
           }),

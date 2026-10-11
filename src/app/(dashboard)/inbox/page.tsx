@@ -33,9 +33,17 @@ import {
   formatWhatsAppPhone,
   isLikelyLid,
 } from '@/domain/whatsapp/format-phone'
-import { Loader2, RefreshCw, UserPlus, UserRoundPen } from 'lucide-react'
+import {
+  Loader2,
+  Paperclip,
+  RefreshCw,
+  UserPlus,
+  UserRoundPen,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { messageBubble } from '@/domain/inbox/message-bubble'
+import { outgoingMediaKind } from '@/domain/inbox/outgoing-media'
+import { uploadAccountMedia } from '@/domain/storage/upload-media'
 
 function formatMessageTime(iso: string): string {
   const d = new Date(iso)
@@ -119,6 +127,8 @@ export default function InboxPage() {
   const queryClient = useQueryClient()
   const [selected, setSelected] = useState<string | null>(null)
   const [text, setText] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const [saveOpen, setSaveOpen] = useState(false)
   const [saveName, setSaveName] = useState('')
@@ -271,6 +281,35 @@ export default function InboxPage() {
       content,
       tempId,
     })
+  }
+
+  const sendFile = async (file: File) => {
+    if (!selected || uploading) return
+    const kind = outgoingMediaKind(file)
+    if ('error' in kind) {
+      toast.error(kind.error)
+      return
+    }
+    setUploading(true)
+    try {
+      const { publicUrl } = await uploadAccountMedia('chat-media', file)
+      const caption = text.trim()
+      setText('')
+      sendMutation.mutate({
+        conversationId: selected,
+        content: caption,
+        tempId: `tmp-${Date.now()}`,
+        messageType: kind.messageType,
+        mediaUrl: publicUrl,
+        filename: file.name,
+      })
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : 'Falha ao enviar o arquivo',
+      )
+    } finally {
+      setUploading(false)
+    }
   }
 
   const selectConversation = (id: string) => {
@@ -492,6 +531,30 @@ export default function InboxPage() {
                 <div ref={messagesEndRef} />
               </div>
               <div className="flex gap-2 border-t border-border p-3">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="sr-only"
+                  tabIndex={-1}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    e.target.value = ''
+                    if (file) void sendFile(file)
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={uploading}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {uploading ? (
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                  ) : (
+                    <Paperclip className="mr-2 size-4" />
+                  )}
+                  Anexo
+                </Button>
                 <Input
                   value={text}
                   onChange={(e) => setText(e.target.value)}

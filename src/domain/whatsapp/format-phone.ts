@@ -69,3 +69,12 @@ export function contactDisplayName(contact: {
   if (name) return name
   return formatWhatsAppPhone(contact?.phone)
 }
+
+/** Explicit BR slices for a WAHA jid that is a real phone plus junk. Not a fuzzy match. */
+export function brPhonePrefixes(digits: string): string[] {
+  if (!digits.startsWith('55') || digits.length < 12) return []
+  const out: string[] = []
+  if (digits.length >= 13) out.push(digits.slice(0, 13))
+  out.push(digits.slice(0, 12))
+  return out
+}

@@ -5,11 +5,12 @@ import {
   resolvePhoneToLid,
 } from '@/domain/whatsapp/waha-api'
 import {
+  brPhonePrefixes,
   digitsOnly,
   isLikelyLid,
   isLikelyPhoneNumber,
 } from '@/domain/whatsapp/format-phone'
-import { sanitizePhoneForMeta, phonesMatch } from '@/domain/whatsapp/phone-utils'
+import { sanitizePhoneForMeta } from '@/domain/whatsapp/phone-utils'
 import { mergeOpenConversationsForContact } from '@/domain/whatsapp/resolve-conversation'
 
 function lidDigits(raw: string | null | undefined): string | null {
@@ -104,16 +105,7 @@ export async function findContactByPhonePrefix(args: {
   phoneOrLid: string
 }): Promise<{ id: string; phone: string; name: string | null } | null> {
   const incoming = digitsOnly(args.phoneOrLid)
-  if (incoming.length < 12) return null
-
-  // Prefer extracting a valid BR phone prefix (13 then 12 digits)
-  const candidates: string[] = []
-  if (incoming.startsWith('55')) {
-    if (incoming.length >= 13) candidates.push(incoming.slice(0, 13))
-    if (incoming.length >= 12) candidates.push(incoming.slice(0, 12))
-  }
-  candidates.push(incoming)
-
+  const candidates = brPhonePrefixes(incoming)
   for (const phone of candidates) {
     if (!isLikelyPhoneNumber(phone)) continue
     const exact = await prisma.contact.findFirst({
@@ -125,20 +117,6 @@ export async function findContactByPhonePrefix(args: {
     })
     if (exact && isLikelyPhoneNumber(exact.phone)) return exact
   }
-
-  // Broader: any phone contact that phonesMatch the incoming digits
-  const contacts = await prisma.contact.findMany({
-    where: { accountId: args.accountId },
-    select: { id: true, phone: true, name: true, phoneNormalized: true },
-    take: 500,
-  })
-  const matches = contacts.filter(
-    (c) =>
-      isLikelyPhoneNumber(c.phone) &&
-      (phonesMatch(c.phone, incoming) ||
-        (c.phoneNormalized ? phonesMatch(c.phoneNormalized, incoming) : false)),
-  )
-  if (matches.length === 1) return matches[0]!
   return null
 }
 
@@ -243,22 +221,7 @@ export async function upgradeContactToPhone(args: {
     },
   })
 
-  let other = otherExact
-  if (!other) {
-    const candidates = await prisma.contact.findMany({
-      where: { accountId: args.accountId, id: { not: args.contactId } },
-      select: { id: true, phone: true, phoneNormalized: true },
-      take: 500,
-    })
-    const match = candidates.find(
-      (c) =>
-        phonesMatch(c.phone, phone) ||
-        (c.phoneNormalized ? phonesMatch(c.phoneNormalized, phone) : false),
-    )
-    if (match) {
-      other = await prisma.contact.findUnique({ where: { id: match.id } })
-    }
-  }
+  const other = otherExact
 
   if (other) {
     // Move conversations from LID contact → phone contact

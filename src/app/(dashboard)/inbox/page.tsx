@@ -147,7 +147,11 @@ export default function InboxPage() {
   const selectedContact = selectedConversation?.contact ?? null
   const hasSavedName = Boolean(selectedContact?.name?.trim())
 
-  const sseConnected = useInboxRealtime(accountId)
+  const sseConnected = useInboxRealtime(accountId, {
+    onConversationMoved: (from, to) => {
+      setSelected((current) => (current === from ? to : current))
+    },
+  })
   const syncMutate = syncMutation.mutate
   const syncBusyRef = useRef(false)
   const sseConnectedRef = useRef(sseConnected)

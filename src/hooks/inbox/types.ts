@@ -31,6 +31,7 @@ export type InboxMessage = {
   status: MessageStatus | string
   created_at: string
   message_id?: string | null
+  media_url?: string | null
 }
 
 export async function fetchConversations(): Promise<InboxConversation[]> {

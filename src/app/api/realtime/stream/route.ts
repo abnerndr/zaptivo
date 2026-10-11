@@ -2,6 +2,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 import { auth } from '@/auth'
+import { listenConnectionString } from '@/domain/db/listen-url'
 import { prisma } from '@/domain/db/prisma'
 import { accountNotifyChannel } from '@/domain/db/notify'
 import { Client } from 'pg'
@@ -25,9 +26,12 @@ export async function GET(req: Request) {
     return new Response('Forbidden', { status: 403 })
   }
 
-  const connectionString = process.env.DATABASE_URL
-  if (!connectionString) {
-    return new Response('DATABASE_URL missing', { status: 500 })
+  let connectionString: string
+  try {
+    connectionString = listenConnectionString(process.env)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'DATABASE_URL missing'
+    return new Response(message, { status: 500 })
   }
 
   const channel = accountNotifyChannel(accountId)

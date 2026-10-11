@@ -96,6 +96,7 @@ model Tenant {
   orgRoles              OrgRole[]
   contacts              Contact[]
   tags                  Tag[]
+  contactTypes          ContactType[]
   customFields          CustomField[]
   conversations         Conversation[]
   whatsappConfig        WhatsappConfig?
@@ -234,11 +235,13 @@ model Contact {
   nameLocked      Boolean  @default(false) @map("name_locked")
   email           String?
   company         String?
+  typeId          String?  @map("type_id") @db.Uuid
   avatarUrl       String?  @map("avatar_url")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
   account       Tenant                 @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  contactType   ContactType?           @relation(fields: [typeId], references: [id], onDelete: SetNull)
   contactTags   ContactTag[]
   customValues  ContactCustomValue[]
   notes         ContactNote[]
@@ -249,7 +252,23 @@ model Contact {
   @@index([phone])
   @@index([accountId, phoneNormalized])
   @@index([accountId, whatsappLid])
+  @@index([accountId, typeId])
   @@map("contacts")
+}
+
+model ContactType {
+  id        String   @id @default(uuid()) @db.Uuid
+  accountId String   @map("account_id") @db.Uuid
+  name      String
+  color     String   @default("#64748b")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  account  Tenant    @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  contacts Contact[]
+
+  @@unique([accountId, name])
+  @@index([accountId])
+  @@map("contact_types")
 }
 
 model Tag {

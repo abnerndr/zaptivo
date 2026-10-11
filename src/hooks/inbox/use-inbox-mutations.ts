@@ -8,6 +8,7 @@ import {
   type InboxConversation,
   type InboxMessage,
 } from '@/hooks/inbox/types'
+import { confirmOptimisticMessage } from '@/hooks/inbox/use-send-message-cache'
 
 export function useSyncWhatsapp() {
   const queryClient = useQueryClient()
@@ -163,18 +164,13 @@ export function useSendMessage() {
       queryClient.setQueryData<InboxMessage[]>(
         inboxKeys.messages(vars.conversationId),
         (list) =>
-          list?.map((m) =>
-            m.id === vars.tempId
-              ? {
-                  id: data.messageId ?? vars.tempId,
-                  sender_type: 'agent',
-                  content_text: data.contentText ?? vars.content,
-                  content_type: data.contentType ?? 'text',
-                  status: data.status ?? 'sent',
-                  created_at: data.createdAt ?? new Date().toISOString(),
-                }
-              : m,
-          ),
+          confirmOptimisticMessage(list, vars.tempId, {
+            id: data.messageId ?? vars.tempId,
+            contentText: data.contentText ?? vars.content,
+            contentType: data.contentType ?? 'text',
+            status: data.status ?? 'sent',
+            createdAt: data.createdAt ?? new Date().toISOString(),
+          }),
       )
     },
     onError: (err, vars, ctx) => {
@@ -190,14 +186,6 @@ export function useSendMessage() {
         )
       }
       toast.error(err instanceof Error ? err.message : 'Falha ao enviar')
-    },
-    onSettled: (_data, _err, vars) => {
-      void queryClient.invalidateQueries({
-        queryKey: inboxKeys.messages(vars.conversationId),
-      })
-      void queryClient.invalidateQueries({
-        queryKey: inboxKeys.conversations(),
-      })
     },
   })
 }

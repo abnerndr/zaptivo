@@ -19,8 +19,6 @@ import {
 import { pickContactJid, pickLidJid } from '@/domain/whatsapp/inbound-jid'
 import { ensureContactAvatar } from '@/domain/whatsapp/ensure-contact-avatar'
 import { settleInboundMedia } from '@/domain/whatsapp/inbound-media'
-import { dispatchInboundToFlows } from '@/domain/flows/engine'
-
 export { pickContactJid, pickLidJid } from '@/domain/whatsapp/inbound-jid'
 
 export type WahaMessagePayload = {
@@ -459,43 +457,17 @@ export async function ingestWahaMessage(args: {
   }
 
   // Identity resolution (WAHA lookups, contact merge) must not delay the bubble.
-  // Flows wait for it so they see the surviving contact / conversation.
-  void (async () => {
-    let settled = { contactId, conversationId, phone }
-    try {
-      settled = await settleContactIdentity({
-        accountId,
-        session,
-        contactId,
-        conversationId,
-        messageId: message.id,
-        phone,
-        pushName,
-        lidJid,
-        jid,
-      })
-    } catch (err) {
-      console.warn('[settleContactIdentity]', err)
-    }
-
-    if (!fromMe && text?.trim()) {
-      const priorCustomer = await prisma.message.count({
-        where: {
-          conversation: { contactId: settled.contactId, accountId },
-          senderType: 'customer',
-          id: { not: message.id },
-        },
-      })
-      await dispatchInboundToFlows({
-        accountId,
-        contactId: settled.contactId,
-        conversationId: settled.conversationId,
-        phone: settled.phone,
-        text: text.trim(),
-        isFirstInbound: priorCustomer === 0,
-      })
-    }
-  })().catch((err) => console.error('[flows dispatch]', err))
+  void settleContactIdentity({
+    accountId,
+    session,
+    contactId,
+    conversationId,
+    messageId: message.id,
+    phone,
+    pushName,
+    lidJid,
+    jid,
+  }).catch((err) => console.warn('[settleContactIdentity]', err))
 
   return { ok: true, conversationId }
 }

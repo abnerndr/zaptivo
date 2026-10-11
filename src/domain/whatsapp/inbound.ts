@@ -147,7 +147,7 @@ async function settleContactIdentity(args: {
   pushName: string | null
   lidJid: string | null
   jid: string
-}): Promise<void> {
+}): Promise<{ contactId: string; conversationId: string; phone: string }> {
   const { accountId, session, messageId, lidJid, jid } = args
   const conversationIdOriginal = args.conversationId
   let { contactId, phone, pushName } = args
@@ -252,24 +252,42 @@ async function settleContactIdentity(args: {
     where: { id: messageId },
     select: { conversationId: true },
   })
-  const movedTo = current?.conversationId
-  if (movedTo && movedTo !== conversationIdOriginal) {
+  const survivingConversationId = current?.conversationId ?? conversationIdOriginal
+  const moved = survivingConversationId !== conversationIdOriginal
+  const identityChanged = contactId !== args.contactId || phone !== args.phone
+
+  if (moved) {
     await notifyAccount({
       table: 'messages',
       op: 'UPDATE',
       id: messageId,
       accountId,
-      conversationId: movedTo,
+      conversationId: survivingConversationId,
       movedFromConversationId: conversationIdOriginal,
-      movedToConversationId: movedTo,
+      movedToConversationId: survivingConversationId,
     }).catch(() => {})
+  }
+
+  if (moved || identityChanged) {
     await notifyAccount({
       table: 'conversations',
       op: 'UPDATE',
-      id: movedTo,
+      id: survivingConversationId,
       accountId,
     }).catch(() => {})
   }
+
+  if (moved) {
+    // Let the thread the message left drop out of the list
+    await notifyAccount({
+      table: 'conversations',
+      op: 'UPDATE',
+      id: conversationIdOriginal,
+      accountId,
+    }).catch(() => {})
+  }
+
+  return { contactId, conversationId: survivingConversationId, phone }
 }
 
 /**
@@ -427,35 +445,44 @@ export async function ingestWahaMessage(args: {
   }).catch(() => {})
 
   // Identity resolution (WAHA lookups, contact merge) must not delay the bubble.
-  void settleContactIdentity({
-    accountId,
-    session,
-    contactId,
-    conversationId,
-    messageId: message.id,
-    phone,
-    pushName,
-    lidJid,
-    jid,
-  }).catch((err) => console.warn('[settleContactIdentity]', err))
+  // Identity resolution (WAHA lookups, contact merge) must not delay the bubble.
+  // Flows wait for it so they see the surviving contact / conversation.
+  void (async () => {
+    let settled = { contactId, conversationId, phone }
+    try {
+      settled = await settleContactIdentity({
+        accountId,
+        session,
+        contactId,
+        conversationId,
+        messageId: message.id,
+        phone,
+        pushName,
+        lidJid,
+        jid,
+      })
+    } catch (err) {
+      console.warn('[settleContactIdentity]', err)
+    }
 
-  if (!fromMe && text?.trim()) {
-    const priorCustomer = await prisma.message.count({
-      where: {
-        conversation: { contactId, accountId },
-        senderType: 'customer',
-        id: { not: message.id },
-      },
-    })
-    void dispatchInboundToFlows({
-      accountId,
-      contactId,
-      conversationId,
-      phone,
-      text: text.trim(),
-      isFirstInbound: priorCustomer === 0,
-    }).catch((err) => console.error('[flows dispatch]', err))
-  }
+    if (!fromMe && text?.trim()) {
+      const priorCustomer = await prisma.message.count({
+        where: {
+          conversation: { contactId: settled.contactId, accountId },
+          senderType: 'customer',
+          id: { not: message.id },
+        },
+      })
+      await dispatchInboundToFlows({
+        accountId,
+        contactId: settled.contactId,
+        conversationId: settled.conversationId,
+        phone: settled.phone,
+        text: text.trim(),
+        isFirstInbound: priorCustomer === 0,
+      })
+    }
+  })().catch((err) => console.error('[flows dispatch]', err))
 
   return { ok: true, conversationId }
 }

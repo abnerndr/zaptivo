@@ -53,9 +53,13 @@ export function useInboxRealtime(
       void client.invalidateQueries({ queryKey: inboxKeys.all })
       return
     }
-    if (payload.table !== 'messages') return
 
-    if (payload.op === 'INSERT' && payload.conversationId) {
+    if (
+      payload.table === 'messages' &&
+      payload.op === 'INSERT' &&
+      payload.id &&
+      payload.conversationId
+    ) {
       const conversationId = payload.conversationId
       // Only append to threads already loaded; unopened threads fetch the full list on open.
       client.setQueryData<InboxMessage[]>(
@@ -79,6 +83,7 @@ export function useInboxRealtime(
     }
 
     if (
+      payload.table === 'messages' &&
       payload.op === 'UPDATE' &&
       payload.movedFromConversationId &&
       payload.movedToConversationId
@@ -91,6 +96,15 @@ export function useInboxRealtime(
         )
       }
       movedRef.current?.(from, to)
+      return
+    }
+
+    // Fallbacks for events without bubble fields (ack, send-message, read/avatar/identity).
+    if (payload.table === 'conversations') {
+      void client.invalidateQueries({ queryKey: inboxKeys.conversations() })
+    } else if (payload.table === 'messages') {
+      // Refreshes open threads only; does not refetch the conversation list.
+      void client.invalidateQueries({ queryKey: [...inboxKeys.all, 'messages'] })
     }
   })
 }

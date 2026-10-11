@@ -64,6 +64,15 @@ describe('applyConversationPreview', () => {
     })
   })
 
+  it('does not increment unread_count on outbound messages', () => {
+    const result = applyConversationPreview(list, {
+      ...event,
+      direction: 'out' as const,
+    })
+    expect(result.known).toBe(true)
+    expect(result.list[0]).toMatchObject({ id: 'conv-1', unread_count: 1 })
+  })
+
   it('reports unknown conversations so the caller can refetch the list', () => {
     const result = applyConversationPreview(list, {
       ...event,

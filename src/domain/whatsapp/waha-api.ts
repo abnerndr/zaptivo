@@ -310,15 +310,21 @@ export async function downloadWahaMedia(args: {
   session: string
 }): Promise<{ body: Buffer; contentType: string }> {
   const base = process.env.WAHA_BASE_URL
-  // Never leak X-Api-Key to a foreign host taken from a webhook payload.
-  const sendKey = shouldSendWahaKey(args.url, base)
-  const url =
-    args.url.startsWith('http') || !base
-      ? args.url
-      : new URL(args.url, base).toString()
+  // Webhook payload urls are untrusted: only fetch from the WAHA origin.
+  if (!base || !shouldSendWahaKey(args.url, base)) {
+    throw new Error('WAHA media origin refused')
+  }
+  const url = args.url.startsWith('http')
+    ? args.url
+    : new URL(args.url, base).toString()
+  // Never follow redirects: they could carry X-Api-Key to another host.
   const res = await fetch(url, {
-    headers: sendKey ? headers({ Accept: '*/*' }) : { Accept: '*/*' },
+    headers: headers({ Accept: '*/*' }),
+    redirect: 'manual',
   })
+  if (res.status >= 300 && res.status < 400) {
+    throw new Error('WAHA media redirect refused')
+  }
   if (!res.ok) throw new Error(`WAHA media ${res.status}`)
   const contentType =
     res.headers.get('content-type')?.split(';')[0]?.trim() ||

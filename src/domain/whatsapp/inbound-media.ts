@@ -30,6 +30,7 @@ export function inboundMediaKey(
 /**
  * The WAHA API key may only go to WAHA itself: true when the media url
  * (absolute, or relative to the base) has the same origin as `baseUrl`.
+ * downloadWahaMedia refuses (throws, no fetch) when this is false.
  */
 export function shouldSendWahaKey(
   mediaUrl: string,

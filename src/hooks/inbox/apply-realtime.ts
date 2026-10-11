@@ -72,3 +72,16 @@ export function applyMessageMove(
   }
   return current
 }
+
+/** Set the final media url on an already rendered bubble. */
+export function applyMediaUrl(
+  messages: InboxMessage[] | undefined,
+  event: RealtimePayload,
+): InboxMessage[] {
+  const current = messages ?? []
+  if (!event.id || !event.mediaUrl) return current
+  if (!current.some((m) => m.id === event.id)) return current
+  return current.map((m) =>
+    m.id === event.id ? { ...m, media_url: event.mediaUrl } : m,
+  )
+}

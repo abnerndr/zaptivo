@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyConversationPreview,
+  applyMediaUrl,
   applyMessageInsert,
   applyMessageMove,
 } from './apply-realtime'
@@ -104,5 +105,47 @@ describe('applyMessageMove', () => {
     }
     expect(applyMessageMove(messages, move, 'conv-1')).toEqual([])
     expect(applyMessageMove([], move, 'conv-2')).toHaveLength(1)
+  })
+})
+
+describe('applyMediaUrl', () => {
+  const messages: InboxMessage[] = [
+    {
+      id: 'msg-1',
+      sender_type: 'customer',
+      content_text: '[image]',
+      content_type: 'image',
+      status: 'delivered',
+      created_at: '2026-10-10T18:00:00.000Z',
+      media_url: null,
+    },
+    {
+      id: 'msg-2',
+      sender_type: 'customer',
+      content_text: 'oi',
+      content_type: 'text',
+      status: 'delivered',
+      created_at: '2026-10-10T18:01:00.000Z',
+    },
+  ]
+
+  it('sets media_url on the matching message only', () => {
+    const result = applyMediaUrl(messages, {
+      ...event,
+      op: 'UPDATE' as const,
+      mediaUrl: 'https://cdn.example/a.jpg',
+    })
+    expect(result[0].media_url).toBe('https://cdn.example/a.jpg')
+    expect(result[1]).toBe(messages[1])
+  })
+
+  it('returns the same list when the message is not loaded', () => {
+    const result = applyMediaUrl(messages, {
+      ...event,
+      id: 'other',
+      op: 'UPDATE' as const,
+      mediaUrl: 'https://cdn.example/a.jpg',
+    })
+    expect(result).toBe(messages)
   })
 })

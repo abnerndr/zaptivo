@@ -5,6 +5,7 @@ import { useRef } from 'react'
 import { useRealtime } from '@/hooks/use-realtime'
 import {
   applyConversationPreview,
+  applyMediaUrl,
   applyMessageInsert,
   applyMessageMove,
 } from '@/hooks/inbox/apply-realtime'
@@ -96,6 +97,22 @@ export function useInboxRealtime(
         )
       }
       movedRef.current?.(from, to)
+      return
+    }
+
+    // Media stored in R2: patch the bubble instead of refetching the thread.
+    if (
+      payload.table === 'messages' &&
+      payload.op === 'UPDATE' &&
+      payload.id &&
+      payload.conversationId &&
+      payload.mediaUrl &&
+      !payload.movedFromConversationId
+    ) {
+      client.setQueryData<InboxMessage[]>(
+        inboxKeys.messages(payload.conversationId),
+        (old) => (old ? applyMediaUrl(old, payload) : old),
+      )
       return
     }
 

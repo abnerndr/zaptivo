@@ -302,6 +302,19 @@ export async function getContactProfilePicture(
   }
 }
 
+/** Download inbound media from the (WAHA-hosted) url found in a webhook payload. */
+export async function downloadWahaMedia(args: {
+  url: string
+  session: string
+}): Promise<{ body: Buffer; contentType: string }> {
+  const res = await fetch(args.url, { headers: headers({ Accept: '*/*' }) })
+  if (!res.ok) throw new Error(`WAHA media ${res.status}`)
+  const contentType =
+    res.headers.get('content-type')?.split(';')[0]?.trim() ||
+    'application/octet-stream'
+  return { body: Buffer.from(await res.arrayBuffer()), contentType }
+}
+
 export async function sendText(args: {
   session: string
   chatId: string

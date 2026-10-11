@@ -18,6 +18,7 @@ import {
 } from '@/domain/whatsapp/resolve-lid'
 import { pickContactJid, pickLidJid } from '@/domain/whatsapp/inbound-jid'
 import { ensureContactAvatar } from '@/domain/whatsapp/ensure-contact-avatar'
+import { settleInboundMedia } from '@/domain/whatsapp/inbound-media'
 import { dispatchInboundToFlows } from '@/domain/flows/engine'
 
 export { pickContactJid, pickLidJid } from '@/domain/whatsapp/inbound-jid'
@@ -406,7 +407,8 @@ export async function ingestWahaMessage(args: {
       senderType: fromMe ? 'agent' : 'customer',
       contentType,
       contentText: text,
-      mediaUrl: payload.media?.url ?? null,
+      // WAHA's internal url is not the final one: settleInboundMedia stores it in R2.
+      mediaUrl: payload.hasMedia ? null : (payload.media?.url ?? null),
       messageId: waMessageId,
       status: fromMe ? 'sent' : 'delivered',
       createdAt,
@@ -432,7 +434,7 @@ export async function ingestWahaMessage(args: {
       text,
       fromMe,
       contentType,
-      mediaUrl: payload.media?.url ?? null,
+      mediaUrl: message.mediaUrl,
       status: message.status,
       createdAt,
     }),
@@ -444,7 +446,18 @@ export async function ingestWahaMessage(args: {
     accountId,
   }).catch(() => {})
 
-  // Identity resolution (WAHA lookups, contact merge) must not delay the bubble.
+  // The bubble is already out: download inbound media into R2 in the background.
+  if (session && payload.hasMedia && payload.media?.url) {
+    void settleInboundMedia({
+      accountId,
+      messageId: message.id,
+      conversationId,
+      mediaUrl: payload.media.url,
+      mimetype: payload.media.mimetype ?? null,
+      session,
+    }).catch((err) => console.warn('[settleInboundMedia]', err))
+  }
+
   // Identity resolution (WAHA lookups, contact merge) must not delay the bubble.
   // Flows wait for it so they see the surviving contact / conversation.
   void (async () => {

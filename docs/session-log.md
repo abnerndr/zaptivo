@@ -207,3 +207,4 @@ Não edite entradas antigas — só acrescente no topo (mais recente primeiro).
 
 - Causa: `NODE_ENV=development` nas envs do Dokploy (vindo do `.env.example`). Reproduzido local; sem a variável o build passa (77/77).
 - `.env.example` não define mais `NODE_ENV`; `docs/dokploy.md` avisa para não setar.
+- Persistiu no redeploy (Dokploy em build type Nixpacks repassa envs ao build). `package.json` agora força `NODE_ENV=production` em `build` e `start`; validado com `NODE_ENV=development pnpm run build` → 77/77.

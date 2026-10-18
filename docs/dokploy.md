@@ -34,7 +34,7 @@ NEXT_PUBLIC_SITE_URL=https://app.seu-dominio.com
 NEXT_PUBLIC_APP_LOCALE=pt-BR
 ```
 
-**Não defina `NODE_ENV`** (nem em env nem em build arg). O `next build`/`next start` já usam `production`; com `NODE_ENV=development` o build quebra no prerender de `/` (`TypeError: Cannot read properties of undefined (reading 'length')` + avisos de `key` em `<head>`/`<meta>`).
+**Não defina `NODE_ENV`** (nem em env nem em build arg). Os scripts `build`/`start` do `package.json` forçam `NODE_ENV=production` (o build type Nixpacks repassa todas as envs do Dokploy para o build); sem isso, `NODE_ENV=development` faz o build quebrar no prerender de `/` (`TypeError: Cannot read properties of undefined (reading 'length')` + avisos de `key` em `<head>`/`<meta>`).
 
 O container roda `prisma migrate deploy` no start e sobe o Next.
 

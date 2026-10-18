@@ -10,8 +10,8 @@
   },
   "scripts": {
     "dev": "next dev --port 3000",
-    "build": "prisma generate && NODE_OPTIONS='--max-old-space-size=8192' next build",
-    "start": "next start -H 0.0.0.0 -p ${PORT:-3000}",
+    "build": "prisma generate && NODE_ENV=production NODE_OPTIONS='--max-old-space-size=8192' next build",
+    "start": "NODE_ENV=production next start -H 0.0.0.0 -p ${PORT:-3000}",
     "start:prod": "prisma migrate deploy && next start -H 0.0.0.0 -p ${PORT:-3000}",
     "lint": "eslint",
     "typecheck": "NODE_OPTIONS='--max-old-space-size=8192' tsc --noEmit",

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/domain/db/prisma'
 import { requireSessionAccount } from '@/domain/auth/context'
-import { ensureSession, stopSession, getSession } from '@/domain/whatsapp/waha-api'
+import { ensureSession, stopSession, getSession } from '@/domain/whatsapp/evolution-api'
 
 export async function GET() {
   try {
@@ -34,7 +34,7 @@ export async function GET() {
         }
       }
     } catch {
-      /* WAHA unreachable — return stored status */
+      /* Evolution unreachable — return stored status */
     }
     return NextResponse.json({
       configured: true,

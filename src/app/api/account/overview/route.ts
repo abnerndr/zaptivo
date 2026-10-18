@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getCurrentAccount, toErrorResponse } from '@/domain/auth/account'
 import { hasMinRole } from '@/domain/auth/roles'
 import { prisma } from '@/domain/db/prisma'
-import { getSession } from '@/domain/whatsapp/waha-api'
+import { getSession } from '@/domain/whatsapp/evolution-api'
 
 export async function GET() {
   try {
@@ -68,7 +68,7 @@ export async function GET() {
           waDisplayName = live.me?.pushName ?? waDisplayName
         }
       } catch {
-        /* WAHA unreachable — use stored status */
+        /* Evolution unreachable — use stored status */
       }
     }
 

@@ -20,7 +20,11 @@ AUTH_TRUST_HOST=true
 NEXT_PUBLIC_SITE_URL=https://app.seu-dominio.com
 NEXT_PUBLIC_APP_LOCALE=pt-BR
 ENCRYPTION_KEY=...
-# + WAHA / R2 / SendGrid / AI conforme uso
+# DIRECT_DATABASE_URL=  # sessão direta, se DATABASE_URL for pooler
+EVOLUTION_BASE_URL=https://evolution.seu-dominio.com
+EVOLUTION_API_KEY=
+EVOLUTION_WEBHOOK_SECRET=
+# + R2 / SendGrid / AI conforme uso
 ```
 
 ### Build Args
@@ -30,11 +34,13 @@ NEXT_PUBLIC_SITE_URL=https://app.seu-dominio.com
 NEXT_PUBLIC_APP_LOCALE=pt-BR
 ```
 
+**Não defina `NODE_ENV`** (nem em env nem em build arg). O `next build`/`next start` já usam `production`; com `NODE_ENV=development` o build quebra no prerender de `/` (`TypeError: Cannot read properties of undefined (reading 'length')` + avisos de `key` em `<head>`/`<meta>`).
+
 O container roda `prisma migrate deploy` no start e sobe o Next.
 
 ## Webhooks / cron
 
-Aponte WAHA e crons para o mesmo host:
+Aponte a Evolution e os crons para o mesmo host:
 
 - `https://app.seu-dominio.com/api/whatsapp/webhook`
 - `https://app.seu-dominio.com/api/automations/cron`

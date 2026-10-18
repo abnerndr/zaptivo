@@ -1,9 +1,4 @@
-import {
-  sendText,
-  sendImage,
-  sendFile,
-  toChatId,
-} from '@/domain/whatsapp/waha-api'
+import { sendMedia, sendText } from '@/domain/whatsapp/evolution-api'
 import {
   validateInteractivePayload,
   interactivePayloadPreviewText,
@@ -277,33 +272,29 @@ export async function sendMessageToConversation(
   }
 
   const attempt = async (phone: string): Promise<string> => {
-    const chatId = toChatId(phone)
-    const session = config.wahaSession
+    const instance = config.wahaSession
+    const number = phone.replace(/\D/g, '')
 
     if (isMediaKind && mediaUrl) {
-      if (messageType === 'image') {
-        const r = await sendImage({
-          session,
-          chatId,
-          file: { url: mediaUrl, filename: filename || undefined },
-          caption: contentText || undefined,
-        })
-        return r.id
-      }
-      const r = await sendFile({
-        session,
-        chatId,
-        file: {
-          url: mediaUrl,
-          filename: filename || undefined,
-          mimetype: undefined,
-        },
+      const kind =
+        messageType === 'image' ||
+        messageType === 'video' ||
+        messageType === 'audio' ||
+        messageType === 'document'
+          ? messageType
+          : 'document'
+      const r = await sendMedia({
+        instance,
+        number,
+        mediatype: kind,
+        media: mediaUrl,
         caption: contentText || undefined,
+        fileName: filename || undefined,
       })
       return r.id
     }
 
-    const r = await sendText({ session, chatId, text: textToSend })
+    const r = await sendText({ instance, number, text: textToSend })
     return r.id
   }
 

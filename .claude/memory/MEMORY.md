@@ -1,6 +1,6 @@
 # Memory — Zaptivo
 
-Last updated: 2026-10-03
+Last updated: 2026-10-16
 
 Índice da memória do projeto. **Leia isto no início de toda sessão de IA** antes de propor arquitetura ou refactors grandes.
 
@@ -9,7 +9,7 @@ Last updated: 2026-10-03
 - **Name:** Zaptivo
 - **What:** CRM de WhatsApp (inbox, contatos, pipelines, broadcasts, automações, AI reply)
 - **Use:** interno hoje; SaaS / script embed no futuro
-- **Stack canônica:** Next.js 16 (App Router) + Prisma + Postgres + Auth.js + WAHA
+- **Stack canônica:** Next.js 16 (App Router) + Prisma + Postgres + Auth.js + Evolution API v2. O worker do agente roda no mesmo processo (ADR 006). Sem n8n.
 - **Owner:** Abner
 
 ## Layout (não reverter)

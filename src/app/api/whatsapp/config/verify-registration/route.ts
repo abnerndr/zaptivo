@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/domain/db/prisma'
 import { requireSessionAccount } from '@/domain/auth/context'
-import { getSession } from '@/domain/whatsapp/waha-api'
+import { getSession } from '@/domain/whatsapp/evolution-api'
 
 /** Replaces Meta registration verify — returns live WAHA session status. */
 export async function GET() {
@@ -19,7 +19,7 @@ export async function GET() {
     } catch (err) {
       return NextResponse.json({
         ok: false,
-        error: err instanceof Error ? err.message : 'WAHA unreachable',
+        error: err instanceof Error ? err.message : 'Evolution unreachable',
         stored_status: config.status,
       })
     }

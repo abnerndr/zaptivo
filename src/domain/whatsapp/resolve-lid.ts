@@ -148,6 +148,10 @@ export async function resolveToPhoneNumber(args: {
 
   const lidJid = raw.includes('@lid') ? raw : `${digits}@lid`
 
+  if (!process.env.WAHA_BASE_URL) {
+    return { phone: sanitizePhoneForMeta(digits), resolved: false, lid }
+  }
+
   // 1) Official lids API
   const pn = await resolveLidToPhone(args.session, lidJid)
   if (pn) {

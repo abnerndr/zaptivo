@@ -9,6 +9,7 @@
 | [003](003-prisma-na-raiz.md) | Prisma na raiz do projeto | Aceito | 2026-10-03 |
 | [004](004-deploy-single-service.md) | Deploy Dokploy single-service | Aceito | 2026-10-03 |
 | [005](005-harness-memory-adr.md) | Harness Memory + ADR + session-log | Aceito | 2026-10-03 |
+| [006](006-evolution-transporte.md) | Evolution API no lugar do WAHA | Aceito | 2026-10-16 |
 
 ## Convenções
 

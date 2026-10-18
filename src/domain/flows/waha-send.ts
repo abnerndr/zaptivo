@@ -1,4 +1,4 @@
-import { sendText, sendImage, sendFile, toChatId } from '@/domain/whatsapp/waha-api'
+import { sendMedia, sendText } from '@/domain/whatsapp/evolution-api'
 import { prisma } from '@/domain/db/prisma'
 
 export async function engineSendText(args: {
@@ -11,8 +11,8 @@ export async function engineSendText(args: {
   })
   if (!config) throw new Error('WhatsApp not configured')
   const r = await sendText({
-    session: config.wahaSession,
-    chatId: toChatId(args.phone),
+    instance: config.wahaSession,
+    number: args.phone,
     text: args.text,
   })
   return { messageId: r.id }
@@ -30,21 +30,13 @@ export async function engineSendMedia(args: {
     where: { accountId: args.accountId },
   })
   if (!config) throw new Error('WhatsApp not configured')
-  const chatId = toChatId(args.phone)
-  if (args.kind === 'image') {
-    const r = await sendImage({
-      session: config.wahaSession,
-      chatId,
-      file: { url: args.url, filename: args.filename },
-      caption: args.caption,
-    })
-    return { messageId: r.id }
-  }
-  const r = await sendFile({
-    session: config.wahaSession,
-    chatId,
-    file: { url: args.url, filename: args.filename },
+  const r = await sendMedia({
+    instance: config.wahaSession,
+    number: args.phone,
+    mediatype: args.kind,
+    media: args.url,
     caption: args.caption,
+    fileName: args.filename,
   })
   return { messageId: r.id }
 }

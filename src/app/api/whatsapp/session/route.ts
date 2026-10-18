@@ -3,13 +3,12 @@ import { auth } from '@/auth'
 import { prisma } from '@/domain/db/prisma'
 import {
   ensureSession,
+  EvolutionQrError,
   getQr,
   getSession,
   logoutSession,
-  startSession,
   stopSession,
-  WahaQrError,
-} from '@/domain/whatsapp/waha-api'
+} from '@/domain/whatsapp/evolution-api'
 
 async function requireConfig() {
   const session = await auth()
@@ -70,9 +69,11 @@ export async function GET() {
     }
 
     if (live.status !== 'SCAN_QR_CODE') {
-      // tenta start e espera QR
-      await startSession(config.wahaSession).catch(() => null)
-      await new Promise((r) => setTimeout(r, 1500))
+      live = await ensureSession(config.wahaSession)
+      await prisma.whatsappConfig.update({
+        where: { id: config.id },
+        data: { status: live.status },
+      })
       live = await getSession(config.wahaSession)
       await prisma.whatsappConfig.update({
         where: { id: config.id },
@@ -94,7 +95,7 @@ export async function GET() {
       headers: { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' },
     })
   } catch (err) {
-    if (err instanceof WahaQrError) {
+    if (err instanceof EvolutionQrError) {
       return NextResponse.json(
         { error: err.message, status: err.status },
         { status: err.httpStatus },

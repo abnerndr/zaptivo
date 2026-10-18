@@ -5,6 +5,62 @@ Não edite entradas antigas — só acrescente no topo (mais recente primeiro).
 
 ---
 
+## 2026-10-16 — Evolution API no lugar do WAHA
+
+### O que foi feito
+- O webhook, o envio e o QR passam a falar com a Evolution API v2.
+- A mensagem é gravada, o agente é enfileirado no mesmo processo e o webhook responde 200 sem esperar o modelo.
+- Sem n8n. Sem segundo serviço.
+
+### Por que
+- O transporte pedido é a Evolution. O CRM continua a fonte da verdade.
+
+### Onde revisar
+- `src/app/api/whatsapp/webhook/route.ts`
+- `src/domain/whatsapp/evolution-api.ts`
+- `src/domain/whatsapp/agent-job.ts`
+- `.claude/adr/006-evolution-transporte.md`
+
+### Impacto
+- [x] Backend
+- [x] Deploy
+
+### Risco / Atenção
+- `EVOLUTION_BASE_URL` e `EVOLUTION_API_KEY` precisam ser preenchidos. O nome da instância continua no campo da sessão do WhatsApp.
+- A sincronização de histórico do WAHA não roda mais.
+
+### Como validar
+- `pnpm exec vitest run src/domain/whatsapp/evolution-event.test.ts src/domain/whatsapp/agent-queue.test.ts`
+
+---
+
+## 2026-10-16 — Envs do chat ao vivo
+
+### O que foi feito
+- `.env` e `.env.example` ganharam `DIRECT_DATABASE_URL` e `WAHA_EVENT_CONSUMER`.
+- Saíram `META_APP_ID`, `META_APP_SECRET`, `ALLOWED_INVITE_HOSTS` e `WAHA_TEMPLATES_DRY_RUN`.
+
+### Por que
+- O LISTEN do chat e o consumidor do WAHA leem essas duas variáveis. As da Meta e as duas opcionais não são lidas por nenhuma rota.
+
+### Onde revisar
+- `.env`
+- `.env.example`
+- `docs/dokploy.md`
+
+### Impacto
+- [x] Deploy
+- [x] DX
+
+### Risco / Atenção
+- `WAHA_EVENT_CONSUMER` ficou `0`. O socket só abre com `1`.
+- `DIRECT_DATABASE_URL` no `.env` local aponta para o mesmo Postgres da `DATABASE_URL`, porta 5436.
+
+### Como validar
+- Subir o app e abrir o inbox. O SSE usa a URL direta. Com `WAHA_EVENT_CONSUMER=0` o processo não abre WebSocket.
+
+---
+
 ## 2026-10-10 — Chat, contatos e automações na branch feat/chat-contato-automacao
 
 ### O que foi feito
@@ -146,3 +202,8 @@ Não edite entradas antigas — só acrescente no topo (mais recente primeiro).
 ### Como validar
 - `pnpm typecheck && pnpm test && pnpm build`
 - `pnpm dev` só na porta 3000
+
+## 2026-10-17 — build Dokploy quebrando no prerender de `/`
+
+- Causa: `NODE_ENV=development` nas envs do Dokploy (vindo do `.env.example`). Reproduzido local; sem a variável o build passa (77/77).
+- `.env.example` não define mais `NODE_ENV`; `docs/dokploy.md` avisa para não setar.

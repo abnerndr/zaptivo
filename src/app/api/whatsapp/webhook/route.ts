@@ -1,61 +1,43 @@
 import { NextResponse } from 'next/server'
-import { verifyWebhookSecret } from '@/domain/whatsapp/waha-api'
 import { prisma } from '@/domain/db/prisma'
 import { notifyAccount } from '@/domain/db/notify'
-import {
-  ingestWahaMessage,
-  type WahaMessagePayload,
-} from '@/domain/whatsapp/inbound'
-import {
-  ingestWahaAck,
-  type WahaAckPayload,
-} from '@/domain/whatsapp/ack'
+import { ingestWahaAck } from '@/domain/whatsapp/ack'
+import { applyEvolutionAgentPlan } from '@/domain/whatsapp/agent-job'
+import { planEvolutionAgent } from '@/domain/whatsapp/agent-queue'
+import { evolutionWebhookAuthorized } from '@/domain/whatsapp/evolution-api'
+import { parseEvolutionWebhook } from '@/domain/whatsapp/evolution-event'
+import { ingestWahaMessage } from '@/domain/whatsapp/inbound'
 
 /**
- * WAHA inbound webhook.
- * Configure WAHA to POST events here with header X-Waha-Webhook-Secret.
- *
- * Dedup strategy:
- * - `message` → inbound (and some engines also echo fromMe)
- * - `message.any` → only phone/app outbound (fromMe + source≠api)
- *   Inbound is already covered by `message`, so we skip !fromMe on message.any
- *   to avoid duplicates when both events fire.
+ * Evolution API webhook.
+ * Saves the message, enqueues the agent, and returns 200 without waiting
+ * for the model. Header `apikey` must match EVOLUTION_WEBHOOK_SECRET
+ * or EVOLUTION_API_KEY.
  */
 export async function POST(req: Request) {
-  if (!verifyWebhookSecret(req)) {
+  if (!evolutionWebhookAuthorized(req)) {
     return new Response('Unauthorized', { status: 401 })
   }
 
-  const body = (await req.json()) as {
-    event?: string
-    session?: string
-    payload?: WahaMessagePayload & Record<string, unknown>
-  }
-
-  const sessionName = body.session
-  if (!sessionName) {
-    return NextResponse.json({ ok: true, skipped: 'no_session' })
+  const body = await req.json().catch(() => null)
+  const parsed = parseEvolutionWebhook(body)
+  if (parsed.type === 'skip' || !('instance' in parsed)) {
+    return NextResponse.json({ ok: true, skipped: parsed.type === 'skip' ? parsed.event || 'unknown' : 'unknown' })
   }
 
   const config = await prisma.whatsappConfig.findUnique({
-    where: { wahaSession: sessionName },
+    where: { wahaSession: parsed.instance },
   })
   if (!config) {
-    return NextResponse.json({ ok: true, skipped: 'unknown_session' })
+    return NextResponse.json({ ok: true, skipped: 'unknown_instance' })
   }
 
-  const event = body.event ?? ''
-  const payload = (body.payload ?? {}) as WahaMessagePayload
-
-  if (event === 'session.status') {
-    const status = String(
-      (payload as { status?: string }).status ?? config.status,
-    )
+  if (parsed.type === 'connection') {
     await prisma.whatsappConfig.update({
       where: { id: config.id },
       data: {
-        status,
-        connectedAt: status === 'WORKING' ? new Date() : config.connectedAt,
+        status: parsed.status,
+        connectedAt: parsed.status === 'WORKING' ? new Date() : config.connectedAt,
       },
     })
     await notifyAccount({
@@ -67,61 +49,46 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true })
   }
 
-  if (event === 'message.ack') {
+  if (parsed.type === 'ack') {
     try {
       const result = await ingestWahaAck({
         accountId: config.accountId,
-        payload: payload as WahaAckPayload,
+        payload: parsed.payload,
       })
       return NextResponse.json(result)
     } catch (err) {
       console.error('[whatsapp/webhook] ack failed:', err)
-      return NextResponse.json(
-        { ok: false, error: 'ack_failed' },
-        { status: 500 },
-      )
+      return NextResponse.json({ ok: false, error: 'ack_failed' }, { status: 500 })
     }
   }
 
-  if (event === 'message' || event === 'message.any') {
-    const fromMe = Boolean(payload.fromMe)
-    const source = String(payload.source ?? '')
-
-    if (event === 'message.any') {
-      // Inbound already handled by `message`
-      if (!fromMe) {
-        return NextResponse.json({ ok: true, skipped: 'inbound_via_message' })
-      }
-      // Outbound via our API already persisted in send-message
-      if (source === 'api') {
-        return NextResponse.json({ ok: true, skipped: 'outbound_via_api' })
-      }
-    }
-
-    // Some engines fire `message` for fromMe too — skip API echoes
-    if (event === 'message' && fromMe && source === 'api') {
-      return NextResponse.json({ ok: true, skipped: 'outbound_via_api' })
-    }
-
-    try {
-      const result = await ingestWahaMessage({
+  try {
+    const result = await ingestWahaMessage({
+      accountId: config.accountId,
+      payload: parsed.payload,
+      session: parsed.instance,
+    })
+    const action = planEvolutionAgent({
+      fromMe: Boolean(parsed.payload.fromMe),
+      source: parsed.payload.source,
+      duplicate: result.reason === 'duplicate',
+    })
+    if (result.conversationId && action !== 'ignore') {
+      void applyEvolutionAgentPlan({
         accountId: config.accountId,
-        payload,
-        session: sessionName,
+        conversationId: result.conversationId,
+        action,
+      }).catch((err) => {
+        console.warn('[agent]', err instanceof Error ? err.message : err)
       })
-      return NextResponse.json(result)
-    } catch (err) {
-      console.error('[whatsapp/webhook] ingest failed:', err)
-      return NextResponse.json(
-        { ok: false, error: 'ingest_failed' },
-        { status: 500 },
-      )
     }
+    return NextResponse.json(result)
+  } catch (err) {
+    console.error('[whatsapp/webhook] ingest failed:', err)
+    return NextResponse.json({ ok: false, error: 'ingest_failed' }, { status: 500 })
   }
-
-  return NextResponse.json({ ok: true, skipped: event || 'unknown_event' })
 }
 
 export async function GET() {
-  return new Response('WAHA webhook — use POST', { status: 200 })
+  return new Response('Evolution webhook — use POST', { status: 200 })
 }

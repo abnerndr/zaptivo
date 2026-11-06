@@ -9,6 +9,8 @@ import {
   logoutSession,
   stopSession,
 } from '@/domain/whatsapp/evolution-api'
+import { WuzapiTransport } from '@/domain/whatsapp/wuzapi-api'
+import { readWhatsappCredential } from '../../../../../prisma/whatsapp-credential'
 
 async function requireConfig() {
   const session = await auth()
@@ -35,8 +37,59 @@ async function requireConfig() {
 export async function GET() {
   const result = await requireConfig()
   if ('error' in result && result.error) return result.error
-  const { config } = result as {
-    config: { id: string; wahaSession: string }
+  const { config, profile } = result as {
+    config: {
+      id: string
+      wahaSession: string
+      provider: 'EVOLUTION' | 'WUZAPI'
+      status: string
+    }
+    profile: { accountId: string }
+  }
+
+  if (config.provider === 'WUZAPI') {
+    try {
+      const token = await readWhatsappCredential(profile.accountId)
+      if (!token) {
+        return NextResponse.json({ error: 'WuzAPI token missing' }, { status: 400 })
+      }
+      const client = new WuzapiTransport({ token })
+      const status = await client.status()
+      if (status.loggedIn) {
+        await prisma.whatsappConfig.update({
+          where: { id: config.id },
+          data: { status: 'WORKING', connectedAt: new Date() },
+        })
+        return NextResponse.json(
+          {
+            error: 'Sessão já autenticada. Use Logout se quiser reconectar.',
+            status: 'WORKING',
+          },
+          { status: 409 },
+        )
+      }
+      const qr = await client.qr()
+      if (!qr) {
+        return NextResponse.json(
+          { error: 'QR ainda não disponível. Tente de novo em alguns segundos.', status: 'STARTING' },
+          { status: 409 },
+        )
+      }
+      await prisma.whatsappConfig.update({
+        where: { id: config.id },
+        data: { status: 'SCAN_QR_CODE' },
+      })
+      if (qr.startsWith('data:image')) {
+        const base64 = qr.slice(qr.indexOf(',') + 1)
+        return new NextResponse(Buffer.from(base64, 'base64'), {
+          headers: { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' },
+        })
+      }
+      return NextResponse.json({ qr })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'QR failed'
+      return NextResponse.json({ error: message }, { status: 502 })
+    }
   }
 
   try {
@@ -109,11 +162,38 @@ export async function GET() {
 export async function POST(req: Request) {
   const result = await requireConfig()
   if ('error' in result && result.error) return result.error
-  const { config } = result as {
-    config: { id: string; wahaSession: string }
+  const { config, profile } = result as {
+    config: {
+      id: string
+      wahaSession: string
+      provider: 'EVOLUTION' | 'WUZAPI'
+    }
+    profile: { accountId: string }
   }
   const { action } = (await req.json()) as { action?: string }
   try {
+    if (config.provider === 'WUZAPI') {
+      const token = await readWhatsappCredential(profile.accountId)
+      if (!token) {
+        return NextResponse.json({ error: 'WuzAPI token missing' }, { status: 400 })
+      }
+      const client = new WuzapiTransport({ token })
+      if (action === 'stop' || action === 'logout') {
+        await client.disconnect()
+        await prisma.whatsappConfig.update({
+          where: { id: config.id },
+          data: { status: 'STOPPED', connectedAt: null },
+        })
+      } else {
+        await client.connect()
+        await prisma.whatsappConfig.update({
+          where: { id: config.id },
+          data: { status: 'STARTING' },
+        })
+      }
+      return NextResponse.json({ ok: true })
+    }
+
     if (action === 'stop') {
       await stopSession(config.wahaSession)
       await prisma.whatsappConfig.update({

@@ -17,6 +17,7 @@ import {
 
 type ConfigState = {
   configured: boolean;
+  provider?: "WUZAPI" | "EVOLUTION";
   waha_session?: string;
   status?: string;
   display_name?: string | null;
@@ -28,7 +29,9 @@ export function WhatsAppConfig() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [config, setConfig] = useState<ConfigState>({ configured: false });
+  const [provider, setProvider] = useState<"WUZAPI" | "EVOLUTION">("WUZAPI");
   const [sessionName, setSessionName] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [qrUrl, setQrUrl] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -36,7 +39,9 @@ export function WhatsAppConfig() {
     if (!res.ok) return;
     const data = (await res.json()) as ConfigState;
     setConfig(data);
+    if (data.provider) setProvider(data.provider);
     if (data.waha_session) setSessionName(data.waha_session);
+    if (data.display_name) setDisplayName(data.display_name);
     if (data.status === "WORKING") setQrUrl(null);
   }, []);
 
@@ -59,6 +64,21 @@ export function WhatsAppConfig() {
       return;
     }
 
+    if (ct.includes("application/json")) {
+      const data = (await res.json()) as { qr?: string };
+      if (data.qr) {
+        setQrUrl((prev) => {
+          if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+          return data.qr!;
+        });
+        toast.success("QR atualizado — escaneie no WhatsApp");
+        await refresh();
+        return;
+      }
+      toast.error("Resposta inesperada ao buscar QR");
+      return;
+    }
+
     if (!ct.includes("image")) {
       toast.error("Resposta inesperada ao buscar QR");
       return;
@@ -66,7 +86,7 @@ export function WhatsAppConfig() {
 
     const blob = await res.blob();
     setQrUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
+      if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
       return URL.createObjectURL(blob);
     });
     toast.success("QR atualizado — escaneie no WhatsApp");
@@ -76,23 +96,34 @@ export function WhatsAppConfig() {
   const save = async () => {
     setSaving(true);
     try {
+      const body =
+        provider === "WUZAPI"
+          ? { provider: "WUZAPI", display_name: displayName || undefined }
+          : {
+              provider: "EVOLUTION",
+              waha_session: sessionName,
+              display_name: displayName || undefined,
+            };
       const res = await apiFetch("/api/whatsapp/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ waha_session: sessionName }),
+        body: JSON.stringify(body),
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) {
         toast.error(data.error ?? "Falha ao salvar");
         return;
       }
-      toast.success("Sessão WAHA salva");
+      toast.success(
+        provider === "WUZAPI"
+          ? "Instância WuzAPI criada/conectada"
+          : "Sessão Evolution salva",
+      );
       await refresh();
-      // Só pede QR se ainda não estiver autenticada
       const after = await apiFetch("/api/whatsapp/config");
       const cfg = (await after.json()) as ConfigState;
       if (cfg.status === "WORKING") {
-        toast.message("Sessão já está WORKING — sem QR necessário");
+        toast.message("Sessão já autenticada — sem QR necessário");
         setQrUrl(null);
       } else {
         await loadQr();
@@ -144,25 +175,57 @@ export function WhatsAppConfig() {
   return (
     <div className="max-w-xl space-y-6">
       <div>
-        <h2 className="text-lg font-semibold">WhatsApp (WAHA)</h2>
+        <h2 className="text-lg font-semibold">WhatsApp</h2>
         <p className="text-sm text-muted-foreground">
-          Conecte via WAHA (não oficial). Risco de banimento — use por sua conta.
-          Uma sessão por conta do CRM.
+          Conecte via WuzAPI (recomendado) ou Evolution. Uma sessão por conta do
+          CRM. Controle de instâncias fica no seu WuzAPI.
         </p>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="session">Nome da sessão WAHA</Label>
+        <Label htmlFor="provider">Provedor</Label>
+        <select
+          id="provider"
+          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+          value={provider}
+          onChange={(e) =>
+            setProvider(e.target.value === "EVOLUTION" ? "EVOLUTION" : "WUZAPI")
+          }
+          disabled={config.configured}
+        >
+          <option value="WUZAPI">WuzAPI</option>
+          <option value="EVOLUTION">Evolution (legado)</option>
+        </select>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="display">Nome da instância</Label>
         <Input
-          id="session"
-          value={sessionName}
-          onChange={(e) => setSessionName(e.target.value)}
-          placeholder="default"
+          id="display"
+          value={displayName}
+          onChange={(e) => setDisplayName(e.target.value)}
+          placeholder="Loja principal"
         />
       </div>
 
+      {provider === "EVOLUTION" && (
+        <div className="space-y-2">
+          <Label htmlFor="session">Nome da sessão Evolution</Label>
+          <Input
+            id="session"
+            value={sessionName}
+            onChange={(e) => setSessionName(e.target.value)}
+            placeholder="default"
+          />
+        </div>
+      )}
+
       {config.configured && (
         <div className="space-y-1 text-sm">
+          <p>
+            Provedor:{" "}
+            <span className="font-medium">{config.provider ?? provider}</span>
+          </p>
           <p>
             Status:{" "}
             <span className="font-medium">{config.status ?? "—"}</span>
@@ -173,8 +236,7 @@ export function WhatsAppConfig() {
               {config.me?.pushName || config.display_name
                 ? ` como ${config.me?.pushName ?? config.display_name}`
                 : ""}
-              {config.me?.id ? ` (${config.me.id})` : ""}. QR só aparece em
-              SCAN_QR_CODE — use Logout para forçar novo pareamento.
+              {config.me?.id ? ` (${config.me.id})` : ""}.
             </p>
           )}
         </div>
@@ -182,7 +244,7 @@ export function WhatsAppConfig() {
 
       {config.webhook_url && (
         <div className="space-y-1">
-          <Label>Webhook URL (configure no WAHA)</Label>
+          <Label>Webhook URL</Label>
           <div className="flex gap-2">
             <Input readOnly value={config.webhook_url} />
             <Button
@@ -201,9 +263,14 @@ export function WhatsAppConfig() {
       )}
 
       <div className="flex flex-wrap gap-2">
-        <Button onClick={() => void save()} disabled={saving || !sessionName}>
+        <Button
+          onClick={() => void save()}
+          disabled={
+            saving || (provider === "EVOLUTION" && !sessionName.trim())
+          }
+        >
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-          Salvar e iniciar
+          {provider === "WUZAPI" ? "Criar instância WuzAPI" : "Salvar e iniciar"}
         </Button>
         <Button variant="outline" onClick={() => void startStop("start")}>
           <Power className="mr-1 h-4 w-4" /> Start
@@ -231,7 +298,7 @@ export function WhatsAppConfig() {
       {qrUrl && (
         <div className="rounded-lg border border-border p-4">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={qrUrl} alt="QR Code WAHA" className="mx-auto max-w-xs" />
+          <img src={qrUrl} alt="QR Code WhatsApp" className="mx-auto max-w-xs" />
           <p className="mt-2 text-center text-xs text-muted-foreground">
             Escaneie com o WhatsApp do número desta sessão
           </p>

@@ -28,3 +28,10 @@ O atendimento passa a entrar e sair pela Evolution API v2. O CRM continua a font
 - `EVOLUTION_BASE_URL`, `EVOLUTION_API_KEY` e, no webhook, `EVOLUTION_WEBHOOK_SECRET` (ou a mesma API key).
 - `WAHA_*` deixa de ser o caminho do inbox.
 - Sincronizar histórico pelo WAHA não roda mais. Mensagens novas chegam pelo webhook.
+
+
+## Adendo — 2026-11-05
+
+A URL pública para novos registros é `POST /webhook/whatsapp`, encaminhada internamente ao handler de `/api/whatsapp/webhook`, preservando método, corpo e autenticação, sem redirecionamento HTTP. A rota anterior permanece disponível durante a migração. Overrides explícitos devem conter a URL completa.
+
+O [ADR-007](007-wuzapi-sse-postgres.md) substitui a escolha de transporte e a decisão de debounce apenas em memória deste ADR. Evolution permanece disponível para contas existentes e rollback; o histórico acima registra a decisão original. A implantação da nova rota e a validação ponta a ponta fazem parte da entrega, não são presumidas por este adendo.

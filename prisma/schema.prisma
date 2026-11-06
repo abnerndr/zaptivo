@@ -18,6 +18,11 @@ enum AccountRole {
   @@map("account_role_enum")
 }
 
+enum WhatsappProvider {
+  EVOLUTION
+  WUZAPI
+}
+
 // ─── Auth.js ─────────────────────────────────────────────────
 
 model User {
@@ -365,6 +370,7 @@ model Conversation {
   deals    Deal[]
 
   @@index([accountId])
+  @@index([accountId, lastMessageAt, id])
   @@index([contactId])
   @@map("conversations")
 }
@@ -390,6 +396,7 @@ model Message {
   reactions    MessageReaction[]
 
   @@index([conversationId])
+  @@index([conversationId, createdAt, id])
   @@index([messageId])
   @@map("messages")
 }
@@ -430,6 +437,9 @@ model WhatsappConfig {
   id          String    @id @default(uuid()) @db.Uuid
   accountId   String    @unique @map("account_id") @db.Uuid
   wahaSession String    @unique @map("waha_session")
+  provider    WhatsappProvider @default(EVOLUTION)
+  providerSessionId String? @map("provider_session_id")
+  encryptedCredential String? @map("encrypted_credential")
   status      String    @default("STOPPED")
   displayName String?   @map("display_name")
   connectedAt DateTime? @map("connected_at")
@@ -439,6 +449,7 @@ model WhatsappConfig {
 
   account Tenant @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
+  @@index([provider, providerSessionId])
   @@map("whatsapp_config")
 }
 

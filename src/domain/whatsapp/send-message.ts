@@ -204,6 +204,10 @@ export async function sendMessageToConversation(
     )
   }
 
+  if (contact.blockedAt) {
+    throw new SendMessageError('blocked', 'Contato na blacklist', 403)
+  }
+
   const config = await prisma.whatsappConfig.findUnique({
     where: { accountId },
   })

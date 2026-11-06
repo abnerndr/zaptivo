@@ -122,4 +122,16 @@ export class WuzapiTransport implements WhatsAppTransport {
     const url = typeof data.URL === 'string' ? data.URL : typeof data.url === 'string' ? data.url : null
     return url && url.length > 0 ? url : null
   }
+
+  async block(phone: string): Promise<void> {
+    const digits = phone.replace(/\D/g, '')
+    if (!digits) throw new WhatsAppTransportError('invalid_request', 'Phone required to block')
+    await this.request('/user/block', { Phone: digits }, undefined, true)
+  }
+
+  async unblock(phone: string): Promise<void> {
+    const digits = phone.replace(/\D/g, '')
+    if (!digits) throw new WhatsAppTransportError('invalid_request', 'Phone required to unblock')
+    await this.request('/user/unblock', { Phone: digits }, undefined, true)
+  }
 }

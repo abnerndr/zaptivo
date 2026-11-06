@@ -243,6 +243,7 @@ model Contact {
   company         String?
   typeId          String?  @map("type_id") @db.Uuid
   avatarUrl       String?  @map("avatar_url")
+  blockedAt       DateTime? @map("blocked_at")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 

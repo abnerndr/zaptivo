@@ -27,6 +27,7 @@ type ContactRow = {
   phone: string
   email: string | null
   company: string | null
+  blocked_at?: string | null
   tags?: Array<{ id: string; name: string; color: string }>
   type: { id: string; name: string; color: string } | null
 }
@@ -90,6 +91,19 @@ export default function ContactsPage() {
     setPhone('')
     setName('')
     toast.success('Contato criado')
+    void load()
+  }
+
+  const toggleBlock = async (c: ContactRow) => {
+    const blocked = Boolean(c.blocked_at)
+    const res = await apiFetch(`/api/contacts/${c.id}/block`, {
+      method: blocked ? 'DELETE' : 'POST',
+    })
+    if (!res.ok) {
+      toast.error(blocked ? 'Falha ao desbloquear' : 'Falha ao bloquear')
+      return
+    }
+    toast.success(blocked ? 'Contato desbloqueado' : 'Contato na blacklist')
     void load()
   }
 
@@ -179,15 +193,24 @@ export default function ContactsPage() {
                     onChange={() => void load()}
                   />
                 </TableCell>
-                <TableCell className="text-right">
+                <TableCell className="text-right space-x-1">
                   {canEdit && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => void remove(c.id)}
-                    >
-                      Remover
-                    </Button>
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => void toggleBlock(c)}
+                      >
+                        {c.blocked_at ? 'Desbloquear' : 'Blacklist'}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => void remove(c.id)}
+                      >
+                        Remover
+                      </Button>
+                    </>
                   )}
                 </TableCell>
               </TableRow>

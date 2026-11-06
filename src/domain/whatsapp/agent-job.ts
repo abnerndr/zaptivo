@@ -48,6 +48,7 @@ export async function runEvolutionAgent(args: {
     include: { contact: true },
   })
   if (!conversation || conversation.aiAutoreplyDisabled) return
+  if (conversation.contact?.blockedAt) return
 
   const config = await loadConfig(args.accountId)
   if (!config) return

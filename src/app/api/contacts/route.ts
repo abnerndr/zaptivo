@@ -56,6 +56,7 @@ export async function GET(req: Request) {
       email: c.email,
       company: c.company,
       avatar_url: c.avatarUrl,
+      blocked_at: c.blockedAt?.toISOString() ?? null,
       account_id: c.accountId,
       created_at: c.createdAt.toISOString(),
       updated_at: c.updatedAt.toISOString(),

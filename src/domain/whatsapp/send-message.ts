@@ -1,4 +1,7 @@
-import { sendMedia, sendText } from '@/domain/whatsapp/evolution-api'
+import { sendMedia } from '@/domain/whatsapp/evolution-api'
+import { randomUUID } from 'crypto'
+import { resolveWhatsAppTransport } from '@/domain/whatsapp/resolve-transport'
+import { WhatsAppTransportError } from '@/domain/whatsapp/transport'
 import {
   validateInteractivePayload,
   interactivePayloadPreviewText,
@@ -271,11 +274,21 @@ export async function sendMessageToConversation(
     textToSend = preview
   }
 
+  const transport = await resolveWhatsAppTransport(accountId)
+  const operationId = randomUUID()
+
   const attempt = async (phone: string): Promise<string> => {
     const instance = config.wahaSession
     const number = phone.replace(/\D/g, '')
 
     if (isMediaKind && mediaUrl) {
+      if (transport.provider === 'WUZAPI') {
+        throw new SendMessageError(
+          'unsupported',
+          'Envio de mídia via WuzAPI ainda não está habilitado neste caminho',
+          400,
+        )
+      }
       const kind =
         messageType === 'image' ||
         messageType === 'video' ||
@@ -294,8 +307,8 @@ export async function sendMessageToConversation(
       return r.id
     }
 
-    const r = await sendText({ instance, number, text: textToSend })
-    return r.id
+    const r = await transport.sendText(number, textToSend, operationId)
+    return r.remoteId
   }
 
   let waMessageId = ''
@@ -311,6 +324,7 @@ export async function sendMessageToConversation(
         lastError = null
         break
       } catch (err) {
+        if (err instanceof SendMessageError) throw err
         const message = err instanceof Error ? err.message : String(err)
         if (!isRecipientNotAllowedError(message)) {
           throw err
@@ -321,9 +335,12 @@ export async function sendMessageToConversation(
 
     if (lastError) throw lastError
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown WAHA error'
-    console.error('[send-message] WAHA send failed:', message)
-    throw new SendMessageError('waha_error', `WAHA error: ${message}`, 502)
+    if (err instanceof SendMessageError) throw err
+    const message = err instanceof Error ? err.message : 'Unknown provider error'
+    const code =
+      err instanceof WhatsAppTransportError ? err.code : 'provider_error'
+    console.error('[send-message] provider send failed:', message)
+    throw new SendMessageError(code, `WhatsApp error: ${message}`, 502)
   }
 
   if (workingPhone !== sanitizedPhone) {

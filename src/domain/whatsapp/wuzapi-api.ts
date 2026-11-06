@@ -95,4 +95,31 @@ export class WuzapiTransport implements WhatsAppTransport {
     if (typeof data.Data !== 'string' || !/^data:[^,]*;base64,/i.test(data.Data)) throw new WhatsAppTransportError('invalid_response', 'Invalid WuzAPI media response')
     return { bytes: Buffer.from(data.Data.slice(data.Data.indexOf(',') + 1), 'base64'), mimeType: typeof data.Mimetype === 'string' ? data.Mimetype : input.mimeType }
   }
+
+  async listContacts(): Promise<Array<{ phone: string; name: string | null }>> {
+    const data = await this.request('/user/contacts')
+    const rows: Array<{ phone: string; name: string | null }> = []
+    for (const [jid, info] of Object.entries(data)) {
+      if (typeof jid !== 'string' || !jid.includes('@s.whatsapp.net')) continue
+      const phone = jid.split('@')[0]?.replace(/\D/g, '') ?? ''
+      if (!phone) continue
+      const row = info && typeof info === 'object' && !Array.isArray(info) ? (info as Record<string, unknown>) : {}
+      const name =
+        (typeof row.FullName === 'string' && row.FullName.trim()) ||
+        (typeof row.PushName === 'string' && row.PushName.trim()) ||
+        (typeof row.FirstName === 'string' && row.FirstName.trim()) ||
+        (typeof row.BusinessName === 'string' && row.BusinessName.trim()) ||
+        null
+      rows.push({ phone, name })
+    }
+    return rows
+  }
+
+  async avatar(phone: string, preview = true): Promise<string | null> {
+    const digits = phone.replace(/\D/g, '')
+    if (!digits) return null
+    const data = await this.request('/user/avatar', { Phone: digits, Preview: preview })
+    const url = typeof data.URL === 'string' ? data.URL : typeof data.url === 'string' ? data.url : null
+    return url && url.length > 0 ? url : null
+  }
 }

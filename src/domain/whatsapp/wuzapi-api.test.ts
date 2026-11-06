@@ -41,6 +41,25 @@ describe('WuzAPI adapter', () => {
     const client = new WuzapiTransport({ baseUrl: 'https://wuz.example', token: 'token', timeoutMs: 5, fetcher })
     await expect(client.sendText({ to: '1', text: 'x', operationId: 'op' })).rejects.toMatchObject({ code: 'timeout', operationId: 'op', outcomeUnknown: true })
   })
+  it('lists contacts and reads avatar URLs', async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(
+        json({
+          success: true,
+          data: {
+            '5511999999999@s.whatsapp.net': { PushName: 'Ana', FullName: '' },
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        json({ success: true, data: { URL: 'https://cdn.example/a.jpg' } }),
+      )
+    const client = new WuzapiTransport({ baseUrl: 'https://wuz.example', token: 't', fetcher })
+    expect(await client.listContacts()).toEqual([{ phone: '5511999999999', name: 'Ana' }])
+    expect(await client.avatar('5511999999999')).toBe('https://cdn.example/a.jpg')
+  })
+
   it('registers webhook with webhook + events and verifies readback', async () => {
     vi.stubEnv('WUZAPI_WEBHOOK_URL', 'https://app.example/webhook/whatsapp')
     const calls: Array<{ path: string; body?: unknown }> = []

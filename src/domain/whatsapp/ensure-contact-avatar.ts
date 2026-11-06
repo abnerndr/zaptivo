@@ -1,10 +1,10 @@
 import { prisma } from '@/domain/db/prisma'
 import { notifyAccount } from '@/domain/db/notify'
-import { getContactProfilePicture, toWahaChatId } from '@/domain/whatsapp/waha-api'
 import { isLikelyPhoneNumber } from '@/domain/whatsapp/format-phone'
+import { resolveWhatsAppTransport } from '@/domain/whatsapp/resolve-transport'
 
 /**
- * If the contact has no avatar, fetch from WAHA and persist.
+ * If the contact has no avatar, fetch from the account provider and persist.
  * Never throws — safe to call from webhook/sync paths.
  */
 export async function ensureContactAvatar(args: {
@@ -23,8 +23,12 @@ export async function ensureContactAvatar(args: {
     const phone = contact.phone || args.phone
     if (!isLikelyPhoneNumber(phone) && !phone.includes('@')) return
 
-    const chatId = toWahaChatId(phone)
-    const url = await getContactProfilePicture(args.session, chatId)
+    const transport = await resolveWhatsAppTransport(args.accountId)
+    if (transport.provider !== 'WUZAPI' || !('client' in transport) || !transport.client) {
+      return
+    }
+
+    const url = await transport.client.avatar(phone, true)
     if (!url) return
 
     const updated = await prisma.contact.updateMany({

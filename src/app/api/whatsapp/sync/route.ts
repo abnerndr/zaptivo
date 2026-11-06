@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
 import { requireSessionAccount } from '@/domain/auth/context'
 import { prisma } from '@/domain/db/prisma'
+import { importWuzapiContacts } from '@/domain/whatsapp/import-contacts'
 
 /**
- * History pull was a WAHA sync. With Evolution, new messages arrive on
- * the webhook, so this route does not call the provider.
+ * For WuzAPI accounts, import contact names/avatars from the provider.
+ * Evolution relies on the webhook for new messages.
  */
 export async function POST() {
   try {
@@ -18,6 +19,12 @@ export async function POST() {
         { status: 400 },
       )
     }
+
+    if (config.provider === 'WUZAPI') {
+      const result = await importWuzapiContacts(ctx.accountId)
+      return NextResponse.json({ ok: true, provider: 'WUZAPI', ...result })
+    }
+
     return NextResponse.json({
       ok: true,
       skipped: 'evolution',

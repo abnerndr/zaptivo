@@ -21,9 +21,13 @@ NEXT_PUBLIC_SITE_URL=https://app.seu-dominio.com
 NEXT_PUBLIC_APP_LOCALE=pt-BR
 ENCRYPTION_KEY=...
 # DIRECT_DATABASE_URL=  # sessão direta, se DATABASE_URL for pooler
+WUZAPI_BASE_URL=https://wuzapi.seu-dominio.com
+# WUZAPI_WEBHOOK_URL=https://app.seu-dominio.com/webhook/whatsapp
 EVOLUTION_BASE_URL=https://evolution.seu-dominio.com
 EVOLUTION_API_KEY=
+# Segredo dedicado; não copie valores reais para este arquivo.
 EVOLUTION_WEBHOOK_SECRET=
+# EVOLUTION_WEBHOOK_URL=https://app.seu-dominio.com/webhook/whatsapp
 # + R2 / SendGrid / AI conforme uso
 ```
 
@@ -40,9 +44,9 @@ O container roda `prisma migrate deploy` no start e sobe o Next.
 
 ## Webhooks / cron
 
-Aponte a Evolution e os crons para o mesmo host:
+Configure os callbacks dos provedores e os crons no mesmo host. Os overrides de webhook são URLs completas; quando ausentes, usa-se a origem de `NEXT_PUBLIC_SITE_URL` com `/webhook/whatsapp`. A rota anterior permanece durante a migração. Confirme a implantação e a autenticação antes da troca; consulte o [runbook](./runbook-local.md).
 
-- `https://app.seu-dominio.com/api/whatsapp/webhook`
+- `https://app.seu-dominio.com/webhook/whatsapp` (callback público; rota anterior `/api/whatsapp/webhook` durante a migração)
 - `https://app.seu-dominio.com/api/automations/cron`
 - `https://app.seu-dominio.com/api/flows/cron`
 

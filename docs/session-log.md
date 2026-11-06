@@ -5,6 +5,51 @@ Não edite entradas antigas — só acrescente no topo (mais recente primeiro).
 
 ---
 
+## 2026-11-05 — WuzAPI controle total (instâncias + chat + contatos)
+
+### O que foi feito
+- Plano `docs/superpowers/plans/2026-11-05-wuzapi-controle-total.md` executado na branch `feat/wuzapi-controle`.
+- Transporte Juspilot (`token` + webhook/events), admin create/delete users, envio de texto por conta, webhook dual Evolution/WuzAPI, UI de instância/QR, import de nomes/avatars, blacklist com mirror WuzAPI.
+
+### Por que
+- Substituir Evolution no caminho operacional com controle das instâncias no WuzAPI próprio, mantendo chat em tempo real via SSE.
+
+### Onde revisar
+- `src/domain/whatsapp/wuzapi-*.ts`, `resolve-transport.ts`, `src/app/api/whatsapp/{config,session,webhook,sync}`, `src/components/settings/whatsapp-config.tsx`, migration `blocked_at`.
+
+### Impacto
+- [x] Frontend
+- [x] Backend
+- [x] DB
+- [ ] Deploy
+- [x] DX
+
+### Risco / Atenção
+- Rodar migrations `20261105*` e `20261106000000_contact_blocked_at` no banco.
+- Mídia via WuzAPI no send ainda retorna unsupported; áudio Opus e HMAC inbound ficam para ciclo seguinte.
+- Validar ponta a ponta contra a instância Juspilot real (`WUZAPI_ADMIN_TOKEN`).
+
+### Como validar
+- `pnpm exec vitest run src/domain/whatsapp/wuzapi-api.test.ts src/domain/whatsapp/wuzapi-admin.test.ts src/app/api/whatsapp/webhook/route.test.ts src/domain/whatsapp/blacklist.test.ts`
+- Criar instância no painel, escanear QR, enviar/receber texto, importar contatos, blacklist.
+
+---
+
+## 2026-11-05 — Decisão e operação da migração WuzAPI
+
+### O que foi feito
+- ADR-007 decide WuzAPI por conta, SSE retomável e trabalho persistente no Postgres; ADR-006 recebe adendo preservando o histórico.
+- Runbook, deploy e exemplo de ambiente registram callback, validação e rollback por conta. O modelo Prisma da tarefa t2 adiciona provedor, sessão e credencial criptografada; migrations ainda precisam ser validadas em uma cópia do banco.
+
+### Risco / atenção
+- O adaptador toma como referência upstream WuzAPI `4f4838c8586e341b1f67850bd77d7828a72e6d04`. A especificação Juspilot declara `info.version` 3.0.0 e difere do adaptador no header de token e no corpo de registro do webhook; reconciliar e validar antes da liberação. A versão efetivamente implantada e a autenticação inbound ainda não foram comprovadas. A arquitetura alvo não comprova que os demais componentes estejam implantados.
+- Índices concorrentes da migração t2 exigem execução sem transação explícita; consultar `prisma/migrations/20261105000000_whatsapp_provider_per_account/VALIDATION.md` e validar a sequência antes do deploy.
+
+### Como validar
+- Conferir a matriz de aceite, o callback externo autenticado, retomada SSE, reinício e rollback por conta no ambiente implantado. Ver [runbook](./runbook-local.md).
+
+---
+
 ## 2026-10-16 — Evolution API no lugar do WAHA
 
 ### O que foi feito

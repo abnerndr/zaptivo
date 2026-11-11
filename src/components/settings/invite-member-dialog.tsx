@@ -1,9 +1,9 @@
 'use client';
-import { apiFetch } from '@/lib/api/client'
+import { apiFetch } from '@/lib/api/client';
 
+import { Copy, Loader2, MessageCircle, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Copy, Loader2, MessageCircle, Sparkles } from 'lucide-react';
 
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
@@ -23,8 +23,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useTranslations } from 'next-intl';
 import { useAuth } from '@/hooks/use-auth';
+import { useTranslations } from 'next-intl';
 
 interface InviteMemberDialogProps {
   open: boolean;
@@ -74,7 +74,7 @@ export function InviteMemberDialog({
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    ;(async () => {
+    (async () => {
       try {
         const res = await apiFetch('/api/account/roles');
         const data = (await res.json()) as { roles?: OrgRoleOption[] };
@@ -150,7 +150,7 @@ export function InviteMemberDialog({
         roleLabel,
         email: trimmedEmail,
         expiresInDays: data.expiresInDays,
-        accountName: account?.name ?? 'wacrm',
+        accountName: account?.name ?? 'zapp',
         emailSent: !!data.emailSent,
       });
 
@@ -179,7 +179,7 @@ export function InviteMemberDialog({
   }
 
   function whatsappShareUrl(url: string): string {
-    const accountName = result?.accountName ?? 'wacrm';
+    const accountName = result?.accountName ?? 'zapp';
     const message = t('whatsappMessage', {
       accountName,
       expiresInDays: result?.expiresInDays ?? 0,
@@ -200,8 +200,8 @@ export function InviteMemberDialog({
         {result ? (
           <>
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-popover-foreground">
-                <Sparkles className="size-4 text-primary" />
+              <DialogTitle className="text-popover-foreground flex items-center gap-2">
+                <Sparkles className="text-primary size-4" />
                 {t('inviteCreated')}
               </DialogTitle>
               <DialogDescription className="text-muted-foreground">
@@ -246,7 +246,7 @@ export function InviteMemberDialog({
                 className={buttonVariants({
                   variant: 'outline',
                   className:
-                    'w-full border-border text-muted-foreground hover:bg-muted',
+                    'border-border text-muted-foreground hover:bg-muted w-full',
                 })}
               >
                 <MessageCircle className="size-4" />
@@ -276,7 +276,9 @@ export function InviteMemberDialog({
 
             <div className="space-y-4 py-2">
               <div className="space-y-2">
-                <Label className="text-muted-foreground">{t('emailLabel')}</Label>
+                <Label className="text-muted-foreground">
+                  {t('emailLabel')}
+                </Label>
                 <Input
                   type="email"
                   required
@@ -288,12 +290,14 @@ export function InviteMemberDialog({
               </div>
 
               <div className="space-y-2">
-                <Label className="text-muted-foreground">{t('roleLabel')}</Label>
+                <Label className="text-muted-foreground">
+                  {t('roleLabel')}
+                </Label>
                 <Select
                   value={orgRoleId}
                   onValueChange={(v) => v && setOrgRoleId(v)}
                 >
-                  <SelectTrigger className="w-full bg-muted border-border text-foreground">
+                  <SelectTrigger className="bg-muted border-border text-foreground w-full">
                     <SelectValue placeholder={t('roleLabel')} />
                   </SelectTrigger>
                   <SelectContent>
@@ -307,12 +311,11 @@ export function InviteMemberDialog({
               </div>
 
               <div className="space-y-2">
-                <Label className="text-muted-foreground">{t('validForLabel')}</Label>
-                <Select
-                  value={expiry}
-                  onValueChange={(v) => v && setExpiry(v)}
-                >
-                  <SelectTrigger className="w-full bg-muted border-border text-foreground">
+                <Label className="text-muted-foreground">
+                  {t('validForLabel')}
+                </Label>
+                <Select value={expiry} onValueChange={(v) => v && setExpiry(v)}>
+                  <SelectTrigger className="bg-muted border-border text-foreground w-full">
                     <SelectValue placeholder={t('validForLabel')} />
                   </SelectTrigger>
                   <SelectContent>
@@ -328,7 +331,7 @@ export function InviteMemberDialog({
               <div className="space-y-2">
                 <Label className="text-muted-foreground">
                   {t('labelTitle')}{' '}
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-muted-foreground text-xs">
                     {t('optional')}
                   </span>
                 </Label>
@@ -339,7 +342,9 @@ export function InviteMemberDialog({
                   maxLength={MAX_LABEL_LEN}
                   className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
                 />
-                <p className="text-xs text-muted-foreground">{t('labelHint')}</p>
+                <p className="text-muted-foreground text-xs">
+                  {t('labelHint')}
+                </p>
               </div>
             </div>
 

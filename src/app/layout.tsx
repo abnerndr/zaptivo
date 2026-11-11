@@ -108,7 +108,13 @@ export default async function RootLayout({
           dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }}
         />
       </head>
-      <body className="bg-background text-foreground min-h-full font-sans">
+      <body
+        className="bg-background text-foreground min-h-full font-sans"
+        // Extensions (ColorZilla's cz-shortcut-listen, Grammarly, etc.)
+        // rewrite attributes on <body> before hydration. The prop only
+        // covers this element, same as on <html> above.
+        suppressHydrationWarning
+      >
         <NextIntlClientProvider messages={messages} locale={locale}>
           <AuthSessionProvider>
             <ThemeProvider>

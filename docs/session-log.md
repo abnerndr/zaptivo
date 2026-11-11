@@ -5,6 +5,73 @@ Não edite entradas antigas — só acrescente no topo (mais recente primeiro).
 
 ---
 
+## 2026-11-11 — avatar WuzAPI 500 no sync
+
+### O que foi feito
+
+- `WuzapiTransport.avatar` trata HTTP 500 de foto ausente ou privada como `null`.
+- Falha real de avatar passa a ser logada uma vez, sem o objeto `Error`.
+
+### Por que
+
+- A WuzAPI usa 500 em `/user/avatar` quando o contato não tem foto. O sync chamava isso para cada contato e o `console.warn` do `Error` enchia o terminal com stack.
+
+### Onde revisar
+
+- `src/domain/whatsapp/wuzapi-api.ts`
+- `src/domain/whatsapp/ensure-contact-avatar.ts`
+
+### Impacto
+
+- [ ] Frontend
+- [x] Backend
+- [ ] DB
+- [ ] Deploy
+- [ ] DX
+
+### Risco / Atenção
+
+- Um 500 com prefixo `failed to get avatar` (incluindo falha transitória do whatsmeow) também vira “sem foto” nesta rodada. `no session` continua sendo erro.
+
+### Como validar
+
+- `npx vitest run src/domain/whatsapp/wuzapi-api.test.ts`
+- Sincronizar contatos e conferir que o terminal não repete o stack de `WuzAPI HTTP 500`.
+
+---
+
+## 2026-11-11 — hydration mismatch no body
+
+### O que foi feito
+
+- `suppressHydrationWarning` no `<body>` do root layout.
+
+### Por que
+
+- A extensão ColorZilla injeta `cz-shortcut-listen="true"` no `<body>` antes da hidratação. O `<html>` já silenciava o mismatch de tema; o `<body>` não.
+
+### Onde revisar
+
+- `src/app/layout.tsx`
+
+### Impacto
+
+- [x] Frontend
+- [ ] Backend
+- [ ] DB
+- [ ] Deploy
+- [ ] DX
+
+### Risco / Atenção
+
+- O aviso só é suprimido nos atributos do próprio `<body>`. Mismatch em filhos continua aparecendo.
+
+### Como validar
+
+- Recarregar `/dashboard` com ColorZilla ativo e confirmar que o console não mostra mais o mismatch em `<body>`.
+
+---
+
 ## 2026-11-10 — QR aparece como data URL
 
 ### O que foi feito

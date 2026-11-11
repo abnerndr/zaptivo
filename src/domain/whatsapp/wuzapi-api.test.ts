@@ -60,6 +60,33 @@ describe('WuzAPI adapter', () => {
     expect(await client.avatar('5511999999999')).toBe('https://cdn.example/a.jpg')
   })
 
+  it('treats a missing or private WuzAPI avatar as no URL', async () => {
+    for (const error of [
+      'no avatar found',
+      'failed to get avatar: the user has hidden their profile picture from you',
+    ]) {
+      const client = new WuzapiTransport({
+        baseUrl: 'https://wuz.example',
+        token: 't',
+        fetcher: vi.fn().mockResolvedValue(json({ code: 500, error, success: false }, 500)),
+      })
+      await expect(client.avatar('5511999999999')).resolves.toBeNull()
+    }
+  })
+
+  it('still throws when the avatar call has no session', async () => {
+    const client = new WuzapiTransport({
+      baseUrl: 'https://wuz.example',
+      token: 't',
+      fetcher: vi.fn().mockResolvedValue(json({ code: 500, error: 'no session', success: false }, 500)),
+    })
+    await expect(client.avatar('5511999999999')).rejects.toMatchObject({
+      code: 'provider',
+      httpStatus: 500,
+      message: 'WuzAPI HTTP 500',
+    })
+  })
+
   it('registers webhook with webhook + events and verifies readback', async () => {
     vi.stubEnv('WUZAPI_WEBHOOK_URL', 'https://app.example/webhook/whatsapp')
     const calls: Array<{ path: string; body?: unknown }> = []

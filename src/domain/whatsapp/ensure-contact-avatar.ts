@@ -3,6 +3,15 @@ import { notifyAccount } from '@/domain/db/notify'
 import { isLikelyPhoneNumber } from '@/domain/whatsapp/format-phone'
 import { resolveWhatsAppTransport } from '@/domain/whatsapp/resolve-transport'
 
+const notedAvatarFailures = new Set<string>()
+
+function warnAvatarFailure(err: unknown): void {
+  const message = err instanceof Error ? err.message : 'failed'
+  if (notedAvatarFailures.has(message)) return
+  notedAvatarFailures.add(message)
+  console.warn(`[ensureContactAvatar] ${message}`)
+}
+
 /**
  * If the contact has no avatar, fetch from the account provider and persist.
  * Never throws — safe to call from webhook/sync paths.
@@ -48,6 +57,6 @@ export async function ensureContactAvatar(args: {
       }).catch(() => {})
     }
   } catch (err) {
-    console.warn('[ensureContactAvatar]', err)
+    warnAvatarFailure(err)
   }
 }

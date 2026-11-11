@@ -6,6 +6,13 @@ export function wuzapiWebhookUrl(): string | null {
   return whatsappWebhookUrl(process.env.WUZAPI_WEBHOOK_URL, process.env.NEXT_PUBLIC_SITE_URL)
 }
 
+// GetAvatar uses HTTP 500 for a missing or private picture
+// ("no avatar found" / "failed to get avatar: …"), not only for outages.
+function isWuzapiAvatarMiss(providerError: string): boolean {
+  const text = providerError.trim().toLowerCase()
+  return text === 'no avatar found' || text.startsWith('failed to get avatar')
+}
+
 export class WuzapiTransport implements WhatsAppTransport {
   private readonly base: string
   private readonly token: string
@@ -43,6 +50,9 @@ export class WuzapiTransport implements WhatsAppTransport {
           : ''
         if (response.status === 500 && providerError === 'not connected') {
           throw new WhatsAppTransportError('provider', 'WuzAPI session is not connected yet', operationId, response.status, mutates)
+        }
+        if (response.status === 500 && isWuzapiAvatarMiss(providerError)) {
+          throw new WhatsAppTransportError('not_found', 'WuzAPI avatar is unavailable', operationId, response.status, false)
         }
         throw this.httpError(response.status, operationId, mutates)
       }
@@ -138,9 +148,14 @@ export class WuzapiTransport implements WhatsAppTransport {
   async avatar(phone: string, preview = true): Promise<string | null> {
     const digits = phone.replace(/\D/g, '')
     if (!digits) return null
-    const data = await this.request('/user/avatar', { Phone: digits, Preview: preview })
-    const url = typeof data.URL === 'string' ? data.URL : typeof data.url === 'string' ? data.url : null
-    return url && url.length > 0 ? url : null
+    try {
+      const data = await this.request('/user/avatar', { Phone: digits, Preview: preview })
+      const url = typeof data.URL === 'string' ? data.URL : typeof data.url === 'string' ? data.url : null
+      return url && url.length > 0 ? url : null
+    } catch (error) {
+      if (error instanceof WhatsAppTransportError && error.message === 'WuzAPI avatar is unavailable') return null
+      throw error
+    }
   }
 
   async block(phone: string): Promise<void> {

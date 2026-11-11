@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireSessionAccount } from '@/domain/auth/context'
+import { getOrgRolePermissions } from '@/domain/auth/org-roles'
+import { canSendMessages } from '@/domain/auth/roles'
 import {
   sendMessageToConversation,
   SendMessageError,
@@ -8,6 +10,10 @@ import {
 export async function POST(req: Request) {
   try {
     const ctx = await requireSessionAccount()
+    const permissions = await getOrgRolePermissions(ctx.profile.orgRoleId)
+    if (ctx.role === 'viewer' || !canSendMessages({ accountRole: ctx.role, permissions })) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
     const body = (await req.json()) as {
       conversation_id?: string
       message_type?: string

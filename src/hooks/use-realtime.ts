@@ -31,7 +31,9 @@ export function useRealtime(
     let stopped = false
     let retryMs = 1000
     let retryTimer: ReturnType<typeof setTimeout> | null = null
-    let hasOpenedBefore = false
+    // Message IDs are stable across duplicate INSERT notifications. Other
+    // updates can legitimately reuse a row ID and must never be suppressed.
+    const seenInserts = new Set<string>()
 
     const connect = () => {
       if (stopped) return
@@ -40,17 +42,27 @@ export function useRealtime(
       )
       es.onopen = () => {
         retryMs = 1000
-        if (hasOpenedBefore) {
-          handlerRef.current({ type: 'reconnect' })
-        }
-        hasOpenedBefore = true
         setConnected(true)
       }
       es.onmessage = (ev) => {
         setConnected(true)
         try {
           const payload = JSON.parse(ev.data) as RealtimePayload
-          if (payload.type === 'ping' || payload.type === 'ready') return
+          if (payload.type === 'ping') return
+          if (payload.type === 'ready') {
+            // The listener is already active. Refresh each consumer's data on
+            // initial connection and reconnect while no durable log exists.
+            handlerRef.current({ type: 'reconnect' })
+            for (const table of ['conversations', 'notifications', 'member_presence']) {
+              handlerRef.current({ table })
+            }
+            return
+          }
+          if (payload.table === 'messages' && payload.op === 'INSERT' && payload.id && payload.conversationId) {
+            if (seenInserts.has(payload.id)) return
+            seenInserts.add(payload.id)
+            if (seenInserts.size > 2000) seenInserts.delete(seenInserts.values().next().value!)
+          }
           handlerRef.current(payload)
         } catch {
           /* ignore malformed */

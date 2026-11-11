@@ -37,7 +37,15 @@ export class WuzapiTransport implements WhatsAppTransport {
         if (!response.ok) throw this.httpError(response.status, operationId, mutates)
         throw new WhatsAppTransportError('invalid_response', 'Invalid WuzAPI response', operationId, response.status, mutates)
       }
-      if (!response.ok) throw this.httpError(response.status, operationId, mutates)
+      if (!response.ok) {
+        const providerError = json && typeof json === 'object' && !Array.isArray(json) && typeof (json as { error?: unknown }).error === 'string'
+          ? (json as { error: string }).error
+          : ''
+        if (response.status === 500 && providerError === 'not connected') {
+          throw new WhatsAppTransportError('provider', 'WuzAPI session is not connected yet', operationId, response.status, mutates)
+        }
+        throw this.httpError(response.status, operationId, mutates)
+      }
       if (!json || typeof json !== 'object' || Array.isArray(json)) throw new WhatsAppTransportError('invalid_response', 'Invalid WuzAPI response', operationId, response.status, mutates)
       const envelope = json as Record<string, unknown>
       if (envelope.success !== true || !envelope.data || typeof envelope.data !== 'object' || Array.isArray(envelope.data)) {
@@ -57,13 +65,25 @@ export class WuzapiTransport implements WhatsAppTransport {
   async connect(): Promise<void> {
     const url = wuzapiWebhookUrl()
     if (!url) throw new WhatsAppTransportError('configuration', 'WuzAPI webhook URL is missing')
-    await this.request('/webhook', { webhook: url, events: ['Message', 'ReadReceipt'] }, undefined, true)
+    await this.request('/webhook', { webhook: url, WebhookURL: url, events: ['Message', 'ReadReceipt'] }, undefined, true)
     const configured = await this.request('/webhook')
     const readback = typeof configured.webhook === 'string' ? configured.webhook : null
     if (readback !== url) throw new WhatsAppTransportError('configuration', 'WuzAPI webhook verification failed')
-    await this.request('/session/connect', { Subscribe: ['Message', 'ReadReceipt'], Immediate: true }, undefined, true)
+    try {
+      await this.request('/session/connect', { Subscribe: ['Message', 'ReadReceipt'], Immediate: true }, undefined, true)
+    } catch (error) {
+      if (!(error instanceof WhatsAppTransportError) || error.httpStatus !== 409) throw error
+    }
   }
-  async qr(): Promise<string | null> { const data = await this.request('/session/qr'); return typeof data.QRCode === 'string' ? data.QRCode : null }
+  async qr(): Promise<string | null> {
+    try {
+      const data = await this.request('/session/qr')
+      return typeof data.QRCode === 'string' && data.QRCode ? data.QRCode : null
+    } catch (error) {
+      if (error instanceof WhatsAppTransportError && error.message === 'WuzAPI session is not connected yet') return null
+      throw error
+    }
+  }
   async status(): Promise<{ connected: boolean; loggedIn: boolean }> {
     const data = await this.request('/session/status')
     if (typeof data.connected !== 'boolean' || typeof data.loggedIn !== 'boolean') throw new WhatsAppTransportError('invalid_response', 'Invalid WuzAPI status')

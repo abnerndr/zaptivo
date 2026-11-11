@@ -1,11 +1,6 @@
 import { prisma } from '@/domain/db/prisma'
 import { preferLockedName } from '@/domain/contacts/name-lock'
 import {
-  getWahaContact,
-  resolveLidToPhone,
-  resolvePhoneToLid,
-} from '@/domain/whatsapp/waha-api'
-import {
   brPhonePrefixes,
   digitsOnly,
   isLikelyLid,
@@ -146,55 +141,10 @@ export async function resolveToPhoneNumber(args: {
     return { phone: sanitizePhoneForMeta(digits), resolved: false, lid }
   }
 
-  const lidJid = raw.includes('@lid') ? raw : `${digits}@lid`
+  // WuzAPI events carry phone/LID mappings when available. Do not infer a
+  // phone from an unresolved LID or query a different provider.
+  return { phone: sanitizePhoneForMeta(digits), resolved: false, lid }
 
-  if (!process.env.WAHA_BASE_URL) {
-    return { phone: sanitizePhoneForMeta(digits), resolved: false, lid }
-  }
-
-  // 1) Official lids API
-  const pn = await resolveLidToPhone(args.session, lidJid)
-  if (pn) {
-    const phone = sanitizePhoneForMeta(pn.split('@')[0] ?? pn)
-    let pushName: string | null = null
-    try {
-      const contact = await getWahaContact(args.session, lidJid)
-      pushName = contact?.pushname || contact?.name || null
-    } catch {
-      /* optional */
-    }
-    if (isLikelyPhoneNumber(phone)) {
-      return { phone, resolved: true, pushName, lid: lidDigits(lidJid) }
-    }
-  }
-
-  // 2) Contact profile may expose number / @c.us id even when lids API is null
-  try {
-    const contact = await getWahaContact(args.session, lidJid)
-    const candidates = [contact?.number, contact?.id]
-    for (const c of candidates) {
-      if (!c) continue
-      const phone = sanitizePhoneForMeta(
-        String(c).includes('@') ? String(c).split('@')[0]! : String(c),
-      )
-      if (isLikelyPhoneNumber(phone) && !String(c).includes('@lid')) {
-        return {
-          phone,
-          resolved: true,
-          pushName: contact?.pushname || contact?.name || null,
-          lid: lidDigits(lidJid),
-        }
-      }
-    }
-  } catch {
-    /* optional */
-  }
-
-  return {
-    phone: sanitizePhoneForMeta(digits),
-    resolved: false,
-    lid: lidDigits(lidJid),
-  }
 }
 
 /**
@@ -287,73 +237,4 @@ export async function upgradeContactToPhone(args: {
     contactId: current.id,
   })
   return { contactId: current.id }
-}
-
-/** Best-effort: learn LID for a phone contact via WAHA (after send / sync). */
-export async function learnLidForPhoneContact(args: {
-  accountId: string
-  contactId: string
-  session: string
-  phone: string
-}): Promise<void> {
-  if (!isLikelyPhoneNumber(args.phone)) return
-  try {
-    const existing = await prisma.contact.findFirst({
-      where: { id: args.contactId, accountId: args.accountId },
-      select: { whatsappLid: true },
-    })
-    if (existing?.whatsappLid) return
-    const lid = await resolvePhoneToLid(args.session, args.phone)
-    if (lid) {
-      await rememberContactLid({
-        accountId: args.accountId,
-        contactId: args.contactId,
-        lid,
-      })
-    }
-  } catch (err) {
-    console.warn('[learnLidForPhoneContact]', err)
-  }
-}
-
-/** Backfill all LID-looking contacts for an account via WAHA lids API. */
-export async function backfillLidContacts(args: {
-  accountId: string
-  session: string
-}): Promise<{ upgraded: number }> {
-  const contacts = await prisma.contact.findMany({
-    where: { accountId: args.accountId },
-    select: { id: true, phone: true, name: true, whatsappLid: true },
-  })
-
-  let upgraded = 0
-  for (const c of contacts) {
-    if (isLikelyLid(c.phone)) {
-      const resolved = await resolveToPhoneNumber({
-        session: args.session,
-        phoneOrLid: c.phone,
-      })
-      if (!resolved.resolved || !isLikelyPhoneNumber(resolved.phone)) continue
-      await upgradeContactToPhone({
-        accountId: args.accountId,
-        contactId: c.id,
-        phone: resolved.phone,
-        name: resolved.pushName || c.name,
-        lid: resolved.lid || c.phone,
-      })
-      upgraded += 1
-      continue
-    }
-
-    // Phone contact without cached LID — learn it for future inbound
-    if (isLikelyPhoneNumber(c.phone) && !c.whatsappLid) {
-      await learnLidForPhoneContact({
-        accountId: args.accountId,
-        contactId: c.id,
-        session: args.session,
-        phone: c.phone,
-      })
-    }
-  }
-  return { upgraded }
 }

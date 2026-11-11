@@ -32,6 +32,19 @@ describe('wuzapi-to-inbound', () => {
     })
   })
 
+  it('provides WuzAPI download metadata for received media', () => {
+    const parsed = parseWuzapiWebhook({
+      type: 'Message', event: {
+        Info: { ID: 'img-1', Chat: '5511@s.whatsapp.net' },
+        Message: { imageMessage: { mimetype: 'image/jpeg', URL: 'https://media.example/file', mediaKey: 'key', fileSha256: 'hash', fileEncSha256: 'encrypted-hash', fileLength: 42, directPath: '/media' } },
+      },
+    })
+    if (parsed.type !== 'message') throw new Error('expected message')
+    expect(wuzapiMessageToPayload(parsed).media?.download).toEqual({
+      kind: 'image', mimeType: 'image/jpeg', url: 'https://media.example/file', mediaKey: 'key', fileSha256: 'hash', fileEncSha256: 'encrypted-hash', fileLength: 42, directPath: '/media',
+    })
+  })
+
   it('maps receipts to ack payloads', () => {
     const parsed = parseWuzapiWebhook({
       type: 'ReadReceipt',

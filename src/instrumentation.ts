@@ -1,3 +1,3 @@
 export async function register() {
-  // O WhatsApp entra pelo webhook da Evolution. Não há consumidor WAHA.
+  // WhatsApp events arrive via the WuzAPI webhook.
 }

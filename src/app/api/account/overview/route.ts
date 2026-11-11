@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { getCurrentAccount, toErrorResponse } from '@/domain/auth/account'
 import { hasMinRole } from '@/domain/auth/roles'
 import { prisma } from '@/domain/db/prisma'
-import { getSession } from '@/domain/whatsapp/evolution-api'
+import { readWhatsappCredential } from '../../../../../prisma/whatsapp-credential'
+import { WuzapiTransport } from '@/domain/whatsapp/wuzapi-api'
 
 export async function GET() {
   try {
@@ -58,17 +59,19 @@ export async function GET() {
     let waConfigured = false
 
     if (waConfig) {
-      waConfigured = true
-      waStatus = waConfig.status
-      waDisplayName = waConfig.displayName
-      try {
-        const live = await getSession(waConfig.wahaSession)
-        if (live?.status) {
-          waStatus = live.status
-          waDisplayName = live.me?.pushName ?? waDisplayName
+      waConfigured = waConfig.provider === 'WUZAPI'
+      if (waConfigured) {
+        waStatus = waConfig.status
+        waDisplayName = waConfig.displayName
+        try {
+          const token = await readWhatsappCredential(accountId)
+          if (token) {
+            const live = await new WuzapiTransport({ token }).status()
+            waStatus = live.loggedIn ? 'WORKING' : live.connected ? 'SCAN_QR_CODE' : 'STOPPED'
+          }
+        } catch {
+          /* Use stored status when WuzAPI is unavailable. */
         }
-      } catch {
-        /* Evolution unreachable — use stored status */
       }
     }
 

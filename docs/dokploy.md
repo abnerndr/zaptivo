@@ -23,11 +23,7 @@ ENCRYPTION_KEY=...
 # DIRECT_DATABASE_URL=  # sessão direta, se DATABASE_URL for pooler
 WUZAPI_BASE_URL=https://wuzapi.seu-dominio.com
 # WUZAPI_WEBHOOK_URL=https://app.seu-dominio.com/webhook/whatsapp
-EVOLUTION_BASE_URL=https://evolution.seu-dominio.com
-EVOLUTION_API_KEY=
-# Segredo dedicado; não copie valores reais para este arquivo.
-EVOLUTION_WEBHOOK_SECRET=
-# EVOLUTION_WEBHOOK_URL=https://app.seu-dominio.com/webhook/whatsapp
+WUZAPI_ADMIN_TOKEN=
 # + R2 / SendGrid / AI conforme uso
 ```
 

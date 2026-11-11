@@ -1,4 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+vi.mock("@/domain/flows/waha-send", () => ({ engineSendText: vi.fn() }));
 import {
   matchReplyId,
   matchesKeywordTrigger,

@@ -90,6 +90,30 @@ describe('WuzAPI adapter', () => {
     })
     await new WuzapiTransport({ baseUrl: 'https://wuz.example', token: 't', fetcher }).connect()
     const setCall = calls.find((c) => c.body && typeof c.body === 'object')
-    expect(setCall?.body).toMatchObject({ webhook: 'https://app.example/webhook/whatsapp' })
+    expect(setCall?.body).toMatchObject({
+      webhook: 'https://app.example/webhook/whatsapp',
+      WebhookURL: 'https://app.example/webhook/whatsapp',
+      events: ['Message', 'ReadReceipt'],
+    })
+  })
+
+  it('treats a not-connected QR response as not ready', async () => {
+    const fetcher = vi.fn().mockResolvedValue(
+      json({ code: 500, error: 'not connected', success: false }, 500),
+    )
+    const client = new WuzapiTransport({ baseUrl: 'https://wuz.example', token: 't', fetcher })
+    await expect(client.qr()).resolves.toBeNull()
+  })
+
+  it('continues when session connect reports the session is already active', async () => {
+    vi.stubEnv('WUZAPI_WEBHOOK_URL', 'https://app.example/webhook/whatsapp')
+    const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
+      if (String(url).endsWith('/session/connect')) {
+        return json({ code: 409, error: 'session is active; disconnect and wait for shutdown first', success: false }, 409)
+      }
+      if (init?.method === 'POST') return json({ success: true, data: { webhook: 'https://app.example/webhook/whatsapp' } })
+      return json({ success: true, data: { webhook: 'https://app.example/webhook/whatsapp', subscribe: ['Message', 'ReadReceipt'] } })
+    })
+    await expect(new WuzapiTransport({ baseUrl: 'https://wuz.example', token: 't', fetcher }).connect()).resolves.toBeUndefined()
   })
 })

@@ -30,6 +30,29 @@ export function wuzapiMessageToPayload(event: MessageEvent): WahaMessagePayload 
           url: event.media.url ?? null,
           mimetype: event.media.mimeType ?? null,
           filename: event.media.fileName ?? null,
+          download: (() => {
+            const metadata = event.media!.metadata
+            const value = (name: string) => {
+              const key = Object.keys(metadata).find((item) => item.toLowerCase() === name.toLowerCase())
+              return key ? metadata[key] : undefined
+            }
+            const mediaKey = value('mediaKey')
+            const fileSha256 = value('fileSha256')
+            const fileEncSha256 = value('fileEncSha256')
+            const directPath = value('directPath')
+            const length = Number(value('fileLength'))
+            if (typeof mediaKey !== 'string' || typeof fileSha256 !== 'string' || !Number.isSafeInteger(length) || length < 0 || !event.media!.mimeType) return undefined
+            return {
+              kind: event.media!.kind,
+              url: event.media!.url,
+              directPath: typeof directPath === 'string' ? directPath : undefined,
+              mediaKey,
+              mimeType: event.media!.mimeType,
+              fileSha256,
+              fileEncSha256: typeof fileEncSha256 === 'string' ? fileEncSha256 : undefined,
+              fileLength: length,
+            }
+          })(),
         }
       : null,
     pushName: event.pushName,

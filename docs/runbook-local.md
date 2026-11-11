@@ -20,7 +20,7 @@ Seed: `SEED_ADMIN_CPF` (default `52998224725`), `SEED_ADMIN_PASSWORD`, `SEED_ADM
 ## Configuração do callback
 
 - `NEXT_PUBLIC_SITE_URL`: origem pública do app; no Dokploy configure também como build arg. Em produção use HTTPS e confirme DNS e acesso externo.
-- `WUZAPI_BASE_URL`: URL base real da API contratada, incluindo eventual prefixo de instalação (ex.: `https://wuzapi.juspilot.com/api`). Não use a URL da documentação como base.
+- `WUZAPI_BASE_URL`: origem HTTP da API, sem barra final. Na instalação Juspilot use `https://wuzapi.juspilot.com`. O caminho `/api` desse host é o Swagger, não a API. Inclua um prefixo só quando a instalação realmente monta a API nele.
 - `WUZAPI_ADMIN_TOKEN`: token admin da instalação (criar/listar/apagar usuários-instância). Aceita alias `WUZAPI_API_KEY`. O token **por conta** é gerado no painel e fica criptografado em `whatsapp_config`; não coloque o token de usuário nesta env.
 - `WUZAPI_WEBHOOK_URL` e `EVOLUTION_WEBHOOK_URL`: overrides opcionais e **URLs completas**. Quando ausentes, cada callback é derivado da origem de `NEXT_PUBLIC_SITE_URL` com `/webhook/whatsapp`.
 - `EVOLUTION_BASE_URL`, `EVOLUTION_API_KEY` e `EVOLUTION_WEBHOOK_SECRET`: Evolution para contas legadas/rollback. `ENCRYPTION_KEY` protege credenciais persistidas.
@@ -32,7 +32,7 @@ Em produção o validador exige HTTPS e rejeita hosts locais ou endereços priva
 Fluxo atual no painel (branch `feat/wuzapi-controle`):
 
 1. Configure `WUZAPI_BASE_URL` + `WUZAPI_ADMIN_TOKEN` (ou `WUZAPI_API_KEY`) e `NEXT_PUBLIC_SITE_URL` público HTTPS.
-2. Em Configurações → WhatsApp, escolha **WuzAPI**, informe um nome e clique em **Criar instância WuzAPI**. O app cria o usuário na WuzAPI, grava o token criptografado e registra o webhook (`token` header nos endpoints de usuário; admin usa `Authorization`).
+2. Em Configurações → WhatsApp, vincule uma instância já existente ou informe um nome e clique em **Criar nova instância**. O vínculo grava o token criptografado. Instância nova registra o webhook (`token` header nos endpoints de usuário; admin usa `Authorization`). Instância já autenticada mantém o webhook atual.
 3. Clique em **QR**, escaneie no telefone e confirme status `WORKING`.
 4. Use **Sincronizar** (`POST /api/whatsapp/sync`) para importar nomes/fotos. Em Contatos: Remover e Blacklist/Desbloquear.
 5. Chat: envio de texto e recebimento via `POST /webhook/whatsapp` (header `token` da conta) alimentam o SSE existente.

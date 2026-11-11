@@ -11,6 +11,7 @@
 | [005](005-harness-memory-adr.md) | Harness Memory + ADR + session-log | Aceito | 2026-10-03 |
 | [006](006-evolution-transporte.md) | Evolution API no lugar do WAHA | Aceito (parcialmente substituído por 007) | 2026-10-16 |
 | [007](007-wuzapi-sse-postgres.md) | WuzAPI, SSE e processamento persistente no Postgres | Aceito | 2026-11-05 |
+| [008](008-wuzapi-unico.md) | WuzAPI como único transporte de WhatsApp | Aceito | 2026-11-06 |
 
 ## Convenções
 

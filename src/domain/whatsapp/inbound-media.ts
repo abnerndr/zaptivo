@@ -1,7 +1,8 @@
 import { prisma } from '@/domain/db/prisma'
 import { notifyAccount } from '@/domain/db/notify'
 import { uploadObject } from '@/domain/storage/r2'
-import { downloadWahaMedia } from '@/domain/whatsapp/waha-api'
+import { resolveWhatsAppTransport } from '@/domain/whatsapp/resolve-transport'
+import type { MediaDownload } from '@/domain/whatsapp/transport'
 
 const EXTENSIONS: Record<string, string> = {
   'image/jpeg': 'jpg',
@@ -44,47 +45,22 @@ export function inboundMediaKey(
 }
 
 /**
- * The WAHA API key may only go to WAHA itself: true when the media url
- * (absolute, or relative to the base) has the same origin as `baseUrl`.
- * downloadWahaMedia refuses (throws, no fetch) when this is false.
- */
-export function shouldSendWahaKey(
-  mediaUrl: string,
-  baseUrl: string | undefined,
-): boolean {
-  if (!baseUrl) return false
-  try {
-    const base = new URL(baseUrl)
-    const target = mediaUrl.startsWith('http')
-      ? new URL(mediaUrl)
-      : new URL(mediaUrl, base)
-    return target.origin === base.origin
-  } catch {
-    return false
-  }
-}
-
-/**
- * Downloads inbound media from WAHA, stores it in R2 and tells the client
+ * Downloads inbound media through WuzAPI, stores it in R2 and tells the client
  * the final URL. Runs after the bubble was already shown.
  */
 export async function settleInboundMedia(args: {
   accountId: string
   messageId: string
   conversationId: string
-  mediaUrl: string
-  mimetype: string | null
-  session: string
+  media: MediaDownload
 }): Promise<string> {
-  const file = await downloadWahaMedia({
-    url: args.mediaUrl,
-    session: args.session,
-  })
-  const mime = args.mimetype || file.contentType
+  const transport = await resolveWhatsAppTransport(args.accountId)
+  const file = await transport.client.downloadMedia(args.media)
+  const mime = args.media.mimeType || file.mimeType
   const key = inboundMediaKey(args.accountId, args.messageId, mime)
   const publicUrl = await uploadObject({
     key,
-    body: file.body,
+    body: Buffer.from(file.bytes),
     contentType: safePublicContentType(mime),
   })
   const updated = await prisma.message.update({
@@ -100,7 +76,7 @@ export async function settleInboundMedia(args: {
     // The thread may have changed while the download was in flight.
     conversationId: updated.conversationId ?? args.conversationId,
     mediaUrl: publicUrl,
-    contentType: args.mimetype ?? undefined,
+    contentType: mime,
   })
   return publicUrl
 }

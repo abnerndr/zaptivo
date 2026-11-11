@@ -1,4 +1,3 @@
-import { sendMedia } from '@/domain/whatsapp/evolution-api'
 import { randomUUID } from 'crypto'
 import { resolveWhatsAppTransport } from '@/domain/whatsapp/resolve-transport'
 import { WhatsAppTransportError } from '@/domain/whatsapp/transport'
@@ -18,7 +17,6 @@ import {
 import { normalizeWahaMessageId } from '@/domain/whatsapp/message-id'
 import { isLikelyLid, isLikelyPhoneNumber } from '@/domain/whatsapp/format-phone'
 import {
-  learnLidForPhoneContact,
   resolveToPhoneNumber,
   upgradeContactToPhone,
 } from '@/domain/whatsapp/resolve-lid'
@@ -282,33 +280,9 @@ export async function sendMessageToConversation(
   const operationId = randomUUID()
 
   const attempt = async (phone: string): Promise<string> => {
-    const instance = config.wahaSession
     const number = phone.replace(/\D/g, '')
-
     if (isMediaKind && mediaUrl) {
-      if (transport.provider === 'WUZAPI') {
-        throw new SendMessageError(
-          'unsupported',
-          'Envio de mídia via WuzAPI ainda não está habilitado neste caminho',
-          400,
-        )
-      }
-      const kind =
-        messageType === 'image' ||
-        messageType === 'video' ||
-        messageType === 'audio' ||
-        messageType === 'document'
-          ? messageType
-          : 'document'
-      const r = await sendMedia({
-        instance,
-        number,
-        mediatype: kind,
-        media: mediaUrl,
-        caption: contentText || undefined,
-        fileName: filename || undefined,
-      })
-      return r.id
+      throw new SendMessageError('unsupported', 'Envio de mídia via WuzAPI ainda não está habilitado neste caminho', 400)
     }
 
     const r = await transport.sendText(number, textToSend, operationId)
@@ -421,13 +395,6 @@ export async function sendMessageToConversation(
     accountId,
   }).catch(() => {})
 
-  // Cache LID for this phone so future inbound @lid events hit this thread
-  void learnLidForPhoneContact({
-    accountId,
-    contactId,
-    session: config.wahaSession,
-    phone: sanitizedPhone,
-  })
 
   return {
     messageId: messageRecord.id,

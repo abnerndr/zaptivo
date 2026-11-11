@@ -28,15 +28,6 @@ vi.mock('@/domain/whatsapp/wuzapi-webhook-auth', () => ({
 import { POST as apiPost } from './route'
 import { POST as publicPost } from '@/app/webhook/whatsapp/route'
 
-const event = JSON.stringify({
-  event: 'messages.upsert',
-  instance: 'shop',
-  data: {
-    key: { id: 'remote-1', remoteJid: '5511999999999@s.whatsapp.net' },
-    message: { conversation: 'hello' },
-  },
-})
-
 const wuzMessage = JSON.stringify({
   type: 'Message',
   event: {
@@ -51,14 +42,6 @@ const wuzMessage = JSON.stringify({
   },
 })
 
-function request(path: string, body = event, secret = 'secret') {
-  return new Request(`https://example.test${path}`, {
-    method: 'POST',
-    headers: { apikey: secret, 'content-type': 'application/json' },
-    body,
-  })
-}
-
 function wuzRequest(body = wuzMessage, token = 'user-token') {
   return new Request('https://example.test/webhook/whatsapp', {
     method: 'POST',
@@ -69,7 +52,6 @@ function wuzRequest(body = wuzMessage, token = 'user-token') {
 
 describe('WhatsApp webhook routes', () => {
   beforeEach(() => {
-    process.env.EVOLUTION_WEBHOOK_SECRET = 'secret'
     mocks.findUnique.mockResolvedValue({
       id: 'config',
       accountId: 'account',
@@ -82,45 +64,22 @@ describe('WhatsApp webhook routes', () => {
     mocks.notify.mockReset().mockResolvedValue(undefined)
   })
 
-  it('calls the same handler with the original request, including auth and body', async () => {
+  it('uses the same authenticated handler on both webhook paths', async () => {
     expect(publicPost).toBe(apiPost)
-    expect((await publicPost(request('/webhook/whatsapp', event, 'wrong'))).status).toBe(401)
-    expect(mocks.findUnique).not.toHaveBeenCalled()
-    mocks.ingest.mockResolvedValue({ ok: true, conversationId: 'conversation' })
-    expect((await publicPost(request('/webhook/whatsapp'))).status).toBe(200)
-    expect(mocks.ingest).toHaveBeenCalledWith(
-      expect.objectContaining({
-        accountId: 'account',
-        payload: expect.objectContaining({ id: 'remote-1', body: 'hello' }),
-      }),
-    )
-  })
-
-  it('does not schedule another agent response when the inbox reports a duplicate', async () => {
-    mocks.ingest
-      .mockResolvedValueOnce({ ok: true, conversationId: 'conversation' })
-      .mockResolvedValueOnce({
-        ok: true,
-        conversationId: 'conversation',
-        reason: 'duplicate',
-      })
-    await apiPost(request('/api/whatsapp/webhook'))
-    await publicPost(request('/webhook/whatsapp'))
-    expect(mocks.agent).toHaveBeenCalledTimes(1)
-  })
-
-  it('rejects an Evolution identifier belonging to another provider', async () => {
-    mocks.findUnique.mockResolvedValue({
-      id: 'config',
-      accountId: 'account',
-      provider: 'WUZAPI',
-    })
-    expect((await apiPost(request('/api/whatsapp/webhook'))).status).toBe(404)
+    expect((await publicPost(wuzRequest())).status).toBe(401)
     expect(mocks.ingest).not.toHaveBeenCalled()
   })
 
-  it('rejects malformed bodies after authentication', async () => {
-    expect((await publicPost(request('/webhook/whatsapp', '{'))).status).toBe(400)
+  it('rejects malformed authenticated requests', async () => {
+    mocks.findWuz.mockResolvedValue({ id: 'cfg', accountId: 'acc', wahaSession: 's', providerSessionId: 'uid' })
+    expect((await publicPost(wuzRequest('{'))).status).toBe(400)
+  })
+
+  it('does not schedule another response for a duplicate', async () => {
+    mocks.findWuz.mockResolvedValue({ id: 'cfg', accountId: 'acc', wahaSession: 's', providerSessionId: 'uid' })
+    mocks.ingest.mockResolvedValue({ ok: true, conversationId: 'conv', reason: 'duplicate' })
+    await publicPost(wuzRequest())
+    expect(mocks.agent).not.toHaveBeenCalled()
   })
 
   it('ingests a WuzAPI message for a WUZAPI account and notifies', async () => {

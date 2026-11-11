@@ -101,7 +101,7 @@ export default function BroadcastDetailPage() {
           </div>
         ) : null}
       </dl>
-      <Button disabled title="Envio via WAHA em breve">
+      <Button disabled title="Envio em breve">
         Enviar (em breve)
       </Button>
     </div>

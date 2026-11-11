@@ -5,6 +5,212 @@ Não edite entradas antigas — só acrescente no topo (mais recente primeiro).
 
 ---
 
+## 2026-11-10 — QR aparece como data URL
+
+### O que foi feito
+- `GET /api/whatsapp/session` devolve `{ qr: "data:image/png;base64,..." }` em vez de bytes PNG.
+
+### Por que
+- O cliente HTTP converte o corpo em texto. O byte `0x89` do PNG vira caractere de substituição e a tag `img` fica com largura zero.
+
+### Onde revisar
+- `src/app/api/whatsapp/session/route.ts`
+- `src/components/settings/whatsapp-config.tsx`
+
+### Impacto
+- [x] Frontend
+- [x] Backend
+- [ ] DB
+- [ ] Deploy
+- [ ] DX
+
+### Risco / Atenção
+- O `src` da imagem precisa começar com `data:image`.
+
+### Como validar
+- Pedir o QR e conferir `naturalWidth` maior que zero.
+
+---
+
+## 2026-11-10 — QR deixa de virar HTTP 500
+
+### O que foi feito
+- O registro do webhook envia `WebhookURL`, que é o campo que esta WuzAPI persiste.
+- QR com `not connected` vira “ainda não disponível” e a rota espera a sessão subir.
+- `session/connect` com sessão já ativa não falha a criação.
+
+### Por que
+- O corpo antigo `{ webhook }` gravava URL vazia. Em seguida `GET /session/qr` respondia 500 `not connected`, e a tela mostrava `WuzAPI HTTP 500`.
+
+### Onde revisar
+- `src/domain/whatsapp/wuzapi-api.ts`
+- `src/app/api/whatsapp/session/route.ts`
+
+### Impacto
+- [x] Frontend
+- [x] Backend
+- [ ] DB
+- [ ] Deploy
+- [ ] DX
+
+### Risco / Atenção
+- A instância de teste `zaptivo-debug` pode continuar listada na WuzAPI até ser removida no painel dela.
+
+### Como validar
+- `pnpm exec vitest run src/domain/whatsapp/wuzapi-api.test.ts`
+- Criar ou abrir a instância e pedir o QR. A resposta não pode ser `WuzAPI HTTP 500`.
+
+---
+
+## 2026-11-10 — Desconectar só remove o vínculo local
+
+### O que foi feito
+- `DELETE /api/whatsapp/config` deixa de apagar o usuário na WuzAPI.
+- Depois de desconectar, a tela recarrega a lista e a instância volta a poder ser vinculada.
+
+### Por que
+- Desconectar chamava `deleteUser(id, full)`, então a instância sumia da API e não havia o que vincular.
+
+### Onde revisar
+- `src/app/api/whatsapp/config/route.ts`
+- `src/components/settings/whatsapp-config.tsx`
+
+### Impacto
+- [x] Frontend
+- [x] Backend
+- [ ] DB
+- [ ] Deploy
+- [ ] DX
+
+### Risco / Atenção
+- A instância `juspilot` já foi removida na WuzAPI por um desconectar anterior. O app não recria essa sessão.
+
+### Como validar
+- `pnpm exec vitest run src/app/api/whatsapp/config/route.test.ts`
+- Desconectar uma instância ainda existente e conferir que ela continua em `GET /admin/users` e reaparece em Vincular.
+
+---
+
+## 2026-11-10 — WuzAPI lista instâncias na origem certa
+
+### O que foi feito
+- `WUZAPI_BASE_URL` passou a ser a origem da API (`https://wuzapi.juspilot.com`). O caminho `/api` desse host é o Swagger.
+- A tela de WhatsApp lista as instâncias já existentes e permite vincular uma autenticada sem criar outro usuário nem regravar o webhook.
+
+### Por que
+- `POST /api/whatsapp/config` chamava `/api/admin/users`, recebia `404 page not found` e respondia `Invalid WuzAPI admin response`. A instância `juspilot` já estava autenticada na origem real.
+
+### Onde revisar
+- `src/domain/whatsapp/wuzapi-admin.ts`
+- `src/app/api/whatsapp/config/route.ts`
+- `src/components/settings/whatsapp-config.tsx`
+
+### Impacto
+- [x] Frontend
+- [x] Backend
+- [ ] DB
+- [ ] Deploy
+- [x] DX
+
+### Risco / Atenção
+- Vincular não altera o webhook da instância já autenticada. Criar uma instância nova ainda registra o webhook local.
+- Reiniciar o `pnpm dev` para recarregar o `.env`.
+
+### Como validar
+- `pnpm exec vitest run src/domain/whatsapp/wuzapi-admin.test.ts src/app/api/whatsapp/config/route.test.ts`
+- Em Configurações → WhatsApp, a instância existente aparece com status autenticada. Vincular não deve pedir QR.
+
+---
+
+## 2026-11-10 — Auth local não segue a URL de produção
+
+### O que foi feito
+- Fora de produção, `AUTH_URL` / `NEXTAUTH_URL` de host público e `AUTH_COOKIE_DOMAIN` público deixam de valer.
+- Os redirects do proxy de autenticação usam o `Host` local da requisição.
+
+### Por que
+- O Auth.js reescreve a origem do request para `AUTH_URL`. Com a URL de produção, abrir localhost respondia 307 para `https://zapp.juspilot.com`. `NODE_ENV` no `.env` não controla isso.
+
+### Onde revisar
+- `src/domain/auth/local-origin.ts`, `src/auth.config.ts`.
+
+### Impacto
+- [ ] Frontend
+- [x] Backend
+- [ ] DB
+- [ ] Deploy
+- [x] DX
+
+### Risco / Atenção
+- Em produção (`NODE_ENV=production`) `AUTH_URL` e o domínio do cookie continuam valendo.
+- Reiniciar o `pnpm dev` depois da mudança. Um 307 antigo pode ficar no cache do browser.
+
+### Como validar
+- `pnpm exec vitest run src/domain/auth/local-origin.test.ts`
+- Abrir `http://localhost:3000/dashboard` e conferir que o `Location` permanece em localhost.
+
+---
+
+## 2026-11-06 — Vínculo de WhatsApp pela WuzAPI
+
+### O que foi feito
+- Espaço de trabalho oferece vínculo e QR pela WuzAPI; contas antigas precisam criar um novo vínculo sem excluir o histórico.
+- Configuração, sessão, envio de texto e webhook usam somente WuzAPI; o padrão do banco para novos registros passa a ser WuzAPI.
+- A mídia recebida usa os metadados do webhook para solicitar o download pela WuzAPI. Foram removidos os módulos e a sonda WAHA sem uso.
+- ADR-008 registra a mudança e as variáveis de deploy foram atualizadas.
+
+### Por que
+- Concentrar a integração de WhatsApp na WuzAPI e permitir o vínculo pelo espaço de trabalho.
+
+### Onde revisar
+- `src/components/settings/whatsapp-config.tsx`, `src/app/api/whatsapp/`, `src/domain/whatsapp/` e `.claude/adr/008-wuzapi-unico.md`.
+
+### Impacto
+- [x] Frontend
+- [x] Backend
+- [x] DB
+- [x] Deploy
+- [ ] DX
+
+### Risco / Atenção
+- Aplicar a migration; configurar URL da WuzAPI, token admin, chave de criptografia e webhook público. Desconectar o provedor anterior antes de autenticar o mesmo número.
+- O envio de mídia por WuzAPI ainda não está habilitado neste caminho; validar o recebimento de mídia e o QR na instância real. Há código legado Evolution com alterações preexistentes preservadas no workspace.
+
+### Como validar
+- Rodar os testes de configuração, webhook e WuzAPI; vincular a conta, escanear o QR e testar envio e recebimento no ambiente real.
+
+---
+
+## 2026-11-06 — Referência antiga ao WAHA nas configurações
+
+### O que foi feito
+- Removida a referência ao WAHA na descrição dos templates locais; respostas da IA e mensagens de texto de fluxos passaram a usar o transporte da conta.
+- Impedido que fluxos enviem mídia de contas WuzAPI para a Evolution; esse caminho de mídia ainda precisa ser implementado.
+- Verificado que o formulário de WhatsApp já apresenta WuzAPI e Evolution, mas a mensagem antiga ainda está nos arquivos compilados em `.next`.
+
+### Por que
+- Manter os textos das configurações alinhados aos provedores atuais.
+
+### Onde revisar
+- `src/components/settings/template-manager.tsx`, `src/domain/whatsapp/agent-job.ts` e `src/domain/flows/waha-send.ts`.
+
+### Impacto
+- [x] Frontend
+- [x] Backend
+- [ ] DB
+- [ ] Deploy
+- [ ] DX
+
+### Risco / Atenção
+- A versão em execução precisa ser reconstruída ou reiniciada com o código atual para atualizar a tela.
+- A remoção dos provedores antigos ainda não foi concluída; contas existentes e mídia exigem migração.
+
+### Como validar
+- Abrir as configurações de WhatsApp e templates após atualizar a aplicação.
+- Validar respostas da IA e envios de fluxo com uma conta WuzAPI configurada.
+
+---
+
 ## 2026-11-05 — WuzAPI controle total (instâncias + chat + contatos)
 
 ### O que foi feito

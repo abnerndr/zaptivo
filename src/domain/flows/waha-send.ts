@@ -1,21 +1,14 @@
-import { sendMedia, sendText } from '@/domain/whatsapp/evolution-api'
-import { prisma } from '@/domain/db/prisma'
+import { randomUUID } from 'node:crypto'
+import { resolveWhatsAppTransport } from '@/domain/whatsapp/resolve-transport'
 
 export async function engineSendText(args: {
   accountId: string
   phone: string
   text: string
 }): Promise<{ messageId: string }> {
-  const config = await prisma.whatsappConfig.findUnique({
-    where: { accountId: args.accountId },
-  })
-  if (!config) throw new Error('WhatsApp not configured')
-  const r = await sendText({
-    instance: config.wahaSession,
-    number: args.phone,
-    text: args.text,
-  })
-  return { messageId: r.id }
+  const transport = await resolveWhatsAppTransport(args.accountId)
+  const r = await transport.sendText(args.phone, args.text, randomUUID())
+  return { messageId: r.remoteId }
 }
 
 export async function engineSendMedia(args: {
@@ -26,19 +19,7 @@ export async function engineSendMedia(args: {
   caption?: string
   filename?: string
 }): Promise<{ messageId: string }> {
-  const config = await prisma.whatsappConfig.findUnique({
-    where: { accountId: args.accountId },
-  })
-  if (!config) throw new Error('WhatsApp not configured')
-  const r = await sendMedia({
-    instance: config.wahaSession,
-    number: args.phone,
-    mediatype: args.kind,
-    media: args.url,
-    caption: args.caption,
-    fileName: args.filename,
-  })
-  return { messageId: r.id }
+  throw new Error(`Envio de ${args.kind} via WuzAPI ainda não está habilitado neste caminho`)
 }
 
 export async function engineSendInteractiveButtons(args: {

@@ -3,10 +3,6 @@ import { requireSessionAccount } from '@/domain/auth/context'
 import { prisma } from '@/domain/db/prisma'
 import { importWuzapiContacts } from '@/domain/whatsapp/import-contacts'
 
-/**
- * For WuzAPI accounts, import contact names/avatars from the provider.
- * Evolution relies on the webhook for new messages.
- */
 export async function POST() {
   try {
     const ctx = await requireSessionAccount()
@@ -20,16 +16,11 @@ export async function POST() {
       )
     }
 
-    if (config.provider === 'WUZAPI') {
-      const result = await importWuzapiContacts(ctx.accountId)
-      return NextResponse.json({ ok: true, provider: 'WUZAPI', ...result })
+    if (config.provider !== 'WUZAPI') {
+      return NextResponse.json({ error: 'Vincule o WhatsApp à WuzAPI' }, { status: 400 })
     }
-
-    return NextResponse.json({
-      ok: true,
-      skipped: 'evolution',
-      chats: 0,
-    })
+    const result = await importWuzapiContacts(ctx.accountId)
+    return NextResponse.json({ ok: true, provider: 'WUZAPI', ...result })
   } catch (err) {
     if (err instanceof Response) return err
     const message = err instanceof Error ? err.message : 'Sync failed'

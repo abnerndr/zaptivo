@@ -47,11 +47,20 @@ export class WuzapiAdmin {
         body: init?.body ? JSON.stringify(init.body) : undefined,
         signal: controller.signal,
       })
+      const raw = await response.text()
       let json: { success?: boolean; data?: unknown }
       try {
-        json = (await response.json()) as { success?: boolean; data?: unknown }
+        json = JSON.parse(raw) as { success?: boolean; data?: unknown }
       } catch {
-        throw new WhatsAppTransportError('invalid_response', 'Invalid WuzAPI admin response')
+        const hint = raw.replace(/\s+/g, ' ').trim().slice(0, 160)
+        throw new WhatsAppTransportError(
+          'invalid_response',
+          hint
+            ? `Invalid WuzAPI admin response (HTTP ${response.status}: ${hint})`
+            : 'Invalid WuzAPI admin response',
+          undefined,
+          response.status,
+        )
       }
       if (!response.ok || json.success !== true) {
         throw new WhatsAppTransportError(
@@ -90,6 +99,7 @@ export class WuzapiAdmin {
       token: String(row.token ?? ''),
       connected: typeof row.connected === 'boolean' ? row.connected : undefined,
       loggedIn: typeof row.loggedIn === 'boolean' ? row.loggedIn : undefined,
+      jid: typeof row.jid === 'string' && row.jid ? row.jid : undefined,
     }))
   }
 

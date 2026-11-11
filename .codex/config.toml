@@ -1,0 +1,3 @@
+[mcp_servers.graphify]
+command = "/home/abner/.local/bin/graphify-mcp"
+args = ["/home/abner/www/abnerndr/zaptivo/graphify-out/graph.json"]

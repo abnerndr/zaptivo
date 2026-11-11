@@ -19,6 +19,7 @@ import {
 import { pickContactJid, pickLidJid } from '@/domain/whatsapp/inbound-jid'
 import { ensureContactAvatar } from '@/domain/whatsapp/ensure-contact-avatar'
 import { settleInboundMedia } from '@/domain/whatsapp/inbound-media'
+import type { MediaDownload } from '@/domain/whatsapp/transport'
 export { pickContactJid, pickLidJid } from '@/domain/whatsapp/inbound-jid'
 
 export type WahaMessagePayload = {
@@ -34,6 +35,7 @@ export type WahaMessagePayload = {
     url?: string | null
     mimetype?: string | null
     filename?: string | null
+    download?: MediaDownload
   } | null
   _data?: {
     pushName?: string
@@ -436,7 +438,6 @@ export async function ingestWahaMessage(args: {
         senderType: fromMe ? 'agent' : 'customer',
         contentType,
         contentText: text,
-        // WAHA's internal url is not the final one: settleInboundMedia stores it in R2.
         mediaUrl: payload.hasMedia ? null : (payload.media?.url ?? null),
         messageId: waMessageId,
         status: fromMe ? 'sent' : 'delivered',
@@ -478,16 +479,9 @@ export async function ingestWahaMessage(args: {
     accountId,
   }).catch(() => {})
 
-  // The bubble is already out: download inbound media into R2 in the background.
-  if (session && payload.hasMedia && payload.media?.url) {
-    void settleInboundMedia({
-      accountId,
-      messageId: message.id,
-      conversationId,
-      mediaUrl: payload.media.url,
-      mimetype: payload.media.mimetype ?? null,
-      session,
-    }).catch((err) => console.warn('[settleInboundMedia]', err))
+  if (payload.media?.download) {
+    void settleInboundMedia({ accountId, messageId: message.id, conversationId, media: payload.media.download })
+      .catch((err) => console.warn('[settleInboundMedia]', err))
   }
 
   // Identity resolution (WAHA lookups, contact merge) must not delay the bubble.

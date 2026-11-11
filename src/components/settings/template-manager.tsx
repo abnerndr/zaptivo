@@ -179,7 +179,7 @@ export function TemplateManager() {
     <div>
       <SettingsPanelHead
         title="Templates"
-        description="Templates locais de mensagem (WAHA). Sem sincronização Meta."
+        description="Templates locais de mensagem. Sem sincronização com a Meta."
         action={
           <Button onClick={openCreate}>
             <Plus className="size-4" />

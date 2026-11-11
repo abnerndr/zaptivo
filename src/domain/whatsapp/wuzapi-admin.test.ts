@@ -46,4 +46,26 @@ describe('WuzapiAdmin', () => {
       webhook: 'https://app.example/webhook/whatsapp',
     })
   })
+
+  it('lists users and keeps the phone jid', async () => {
+    const fetcher = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: [{ id: 'uid-1', name: 'juspilot', token: 'user-tok', connected: true, loggedIn: true, jid: '5516997720763@s.whatsapp.net' }],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    const users = await new WuzapiAdmin({ baseUrl: 'https://wuz.example', adminToken: 'adm', fetcher }).listUsers()
+    expect(users).toEqual([
+      { id: 'uid-1', name: 'juspilot', token: 'user-tok', connected: true, loggedIn: true, jid: '5516997720763@s.whatsapp.net' },
+    ])
+  })
+
+  it('reports a non-JSON admin body with the HTTP status', async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response('404 page not found\n', { status: 404, headers: { 'Content-Type': 'text/plain' } }))
+    const admin = new WuzapiAdmin({ baseUrl: 'https://wuz.example/api', adminToken: 'adm', fetcher })
+    await expect(admin.listUsers()).rejects.toThrow('Invalid WuzAPI admin response (HTTP 404: 404 page not found)')
+  })
 })

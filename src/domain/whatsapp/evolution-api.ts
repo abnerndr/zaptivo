@@ -1,4 +1,5 @@
 import { timingSafeEqual } from 'node:crypto'
+import { whatsappWebhookUrl } from './webhook-url'
 
 export type EvolutionSessionStatus = 'WORKING' | 'SCAN_QR_CODE' | 'STOPPED' | 'STARTING'
 
@@ -77,20 +78,14 @@ export async function getSession(instance: string): Promise<{
 }
 
 export function evolutionWebhookUrl(): string | null {
-  const explicit = process.env.EVOLUTION_WEBHOOK_URL?.replace(/\/$/, '')
-  const site = (explicit || process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/$/, '')
-  if (!site) return null
-  const url = site.includes('/api/whatsapp/webhook')
-    ? site
-    : `${site}/api/whatsapp/webhook`
-  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i.test(url)) return null
-  return url
+  return whatsappWebhookUrl(process.env.EVOLUTION_WEBHOOK_URL, process.env.NEXT_PUBLIC_SITE_URL)
 }
 
 export async function ensureSession(instance: string): Promise<{
   status: EvolutionSessionStatus
   me: { id?: string; pushName?: string } | null
 }> {
+  const hook = evolutionWebhookUrl()
   const current = await getSession(instance).catch(() => null)
   if (current && current.status !== 'STOPPED') return current
 
@@ -110,7 +105,6 @@ export async function ensureSession(instance: string): Promise<{
     }
   }
 
-  const hook = evolutionWebhookUrl()
   if (hook) {
     await fetch(`${baseUrl()}/webhook/set/${encodeURIComponent(instance)}`, {
       method: 'POST',

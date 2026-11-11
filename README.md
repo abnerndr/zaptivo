@@ -1,13 +1,13 @@
 # Zaptivo
 
-CRM de WhatsApp (inbox, contatos, pipelines, broadcasts, automações) — Next.js + Prisma + WAHA.
+CRM de WhatsApp (inbox, contatos, pipelines, broadcasts, automações) — Next.js + Prisma + WuzAPI.
 
 ## Stack
 
 - Next.js 16 (App Router) — UI + API
 - Prisma + Postgres
 - Auth.js (CPF/senha)
-- WAHA (WhatsApp)
+- WuzAPI (WhatsApp)
 
 ## Layout
 

@@ -2,7 +2,8 @@ import { prisma } from '@/domain/db/prisma'
 import { notifyAccount } from '@/domain/db/notify'
 import { messageInsertPayload } from '@/domain/realtime/payload'
 import { decrypt } from '@/domain/whatsapp/encryption'
-import { sendText } from '@/domain/whatsapp/evolution-api'
+import { randomUUID } from 'node:crypto'
+import { resolveWhatsAppTransport } from '@/domain/whatsapp/resolve-transport'
 import { buildSystemPrompt } from '@/domain/ai/defaults'
 import { buildHandoffSummary } from '@/domain/ai/handoff'
 import { generateReply } from '@/domain/ai/generate'
@@ -100,11 +101,8 @@ export async function runEvolutionAgent(args: {
   const text = generated.text.trim()
   if (!text) return
 
-  const sent = await sendText({
-    instance: wa.wahaSession,
-    number: conversation.contact.phone,
-    text,
-  })
+  const transport = await resolveWhatsAppTransport(args.accountId)
+  const sent = await transport.sendText(conversation.contact.phone, text, randomUUID())
   const createdAt = new Date()
   const message = await prisma.message.create({
     data: {
@@ -112,7 +110,7 @@ export async function runEvolutionAgent(args: {
       senderType: 'bot',
       contentType: 'text',
       contentText: text,
-      messageId: sent.id,
+      messageId: sent.remoteId,
       status: 'sent',
       aiGenerated: true,
       createdAt,

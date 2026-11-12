@@ -5,6 +5,44 @@ Não edite entradas antigas — só acrescente no topo (mais recente primeiro).
 
 ---
 
+## 2026-11-12 — contatos: busca no topo, tipos em linha e cadastro em modal
+
+### O que foi feito
+
+- Página de contatos reordenada: título com **Novo contato**, busca logo abaixo, tipos de lead na mesma linha do atalho de criar tipo, tabela em seguida.
+- Cadastro saiu do formulário fixo e foi para um modal (telefone, nome, e-mail, empresa). Contato bloqueado mostra badge.
+- Lista, tipos e mutações (criar, apagar, bloquear, atribuir e apagar tipo) passam pelo TanStack Query em `src/lib/api/hooks.ts`. Busca usa `useDeferredValue`.
+
+### Por que
+
+- O cadastro empilhava painel, busca e formulário sempre aberto, e refazia fetch com `useEffect` apesar do QueryClient já existir no dashboard.
+
+### Onde revisar
+
+- Layout em `src/app/(dashboard)/contacts/page.tsx`.
+- Mutações e toasts em `src/lib/api/hooks.ts`.
+- Modal em `src/components/contacts/create-contact-dialog.tsx`.
+
+### Impacto
+
+- [x] Frontend
+- [ ] Backend
+- [ ] DB
+- [ ] Deploy
+- [ ] DX
+
+### Risco / Atenção
+
+- Zustand não foi adicionado: busca, página e modal ficam no estado local; cache de servidor fica no Query Client.
+- Quem não tem `send-messages` continua sem criar, editar tipo, bloquear ou remover.
+
+### Como validar
+
+- `npx vitest run src/components/contacts/contact-type-panel.test.ts`
+- Abrir `/contacts`: busca sob o título, tipos em linha, **Novo contato** abre o modal e a lista atualiza sem recarregar a página.
+
+---
+
 ## 2026-11-12 — fix: conversas vazias não fixam o topo da Inbox
 
 ### O que foi feito

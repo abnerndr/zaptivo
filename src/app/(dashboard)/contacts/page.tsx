@@ -1,10 +1,11 @@
-'use client'
-import { apiFetch } from '@/lib/api/client'
+'use client';
 
-import { useCallback, useEffect, useState } from 'react'
-import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import { Loader2, Plus, Search } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import {
   Table,
   TableBody,
@@ -12,161 +13,125 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table'
-import { Loader2, Plus, Search } from 'lucide-react'
-import { useCan } from '@/hooks/use-can'
+} from '@/components/ui/table';
+import { useCan } from '@/hooks/use-can';
 import {
   ContactTypePanel,
   ContactTypeSelect,
-  type ContactTypeOption,
-} from '@/components/contacts/contact-type-panel'
+} from '@/components/contacts/contact-type-panel';
+import { CreateContactDialog } from '@/components/contacts/create-contact-dialog';
+import {
+  useAssignContactTypeMutation,
+  useContactTypesQuery,
+  useContactsQuery,
+  useCreateContactTypeMutation,
+  useDeleteContactMutation,
+  useDeleteContactTypeMutation,
+  useToggleBlockContactMutation,
+} from '@/lib/api/hooks';
 
-type ContactRow = {
-  id: string
-  name: string | null
-  phone: string
-  email: string | null
-  company: string | null
-  blocked_at?: string | null
-  tags?: Array<{ id: string; name: string; color: string }>
-  type: { id: string; name: string; color: string } | null
-}
+const PAGE_SIZE = 25;
 
 export default function ContactsPage() {
-  const canEdit = useCan('send-messages')
-  const [contacts, setContacts] = useState<ContactRow[]>([])
-  const [types, setTypes] = useState<ContactTypeOption[]>([])
-  const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-  const [page, setPage] = useState(0)
-  const [totalCount, setTotalCount] = useState(0)
-  const [phone, setPhone] = useState('')
-  const [name, setName] = useState('')
+  const canEdit = useCan('send-messages');
+  const [search, setSearch] = useState('');
+  const deferredSearch = useDeferredValue(search);
+  const [page, setPage] = useState(0);
+  const [createOpen, setCreateOpen] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    try {
-      const qs = new URLSearchParams({
-        page: String(page),
-        pageSize: '25',
-        ...(search ? { q: search } : {}),
-      })
-      const res = await apiFetch(`/api/contacts?${qs}`)
-      if (!res.ok) throw new Error('Falha ao carregar')
-      const data = (await res.json()) as {
-        contacts: ContactRow[]
-        totalCount: number
-      }
-      setContacts(data.contacts)
-      setTotalCount(data.totalCount)
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro')
-    } finally {
-      setLoading(false)
-    }
-  }, [page, search])
+  const params = useMemo(() => {
+    const qs = new URLSearchParams({
+      page: String(page),
+      pageSize: String(PAGE_SIZE),
+    });
+    const q = deferredSearch.trim();
+    if (q) qs.set('q', q);
+    return qs;
+  }, [page, deferredSearch]);
+
+  const contactsQuery = useContactsQuery(params);
+  const typesQuery = useContactTypesQuery();
+  const remove = useDeleteContactMutation();
+  const toggleBlock = useToggleBlockContactMutation();
+  const createType = useCreateContactTypeMutation();
+  const deleteType = useDeleteContactTypeMutation();
+  const assignType = useAssignContactTypeMutation();
+
+  const contacts = contactsQuery.data?.contacts ?? [];
+  const totalCount = contactsQuery.data?.totalCount ?? 0;
+  const types = typesQuery.data ?? [];
 
   useEffect(() => {
-    void load()
-  }, [load])
+    if (!contactsQuery.isError) return;
+    toast.error(
+      contactsQuery.error instanceof Error
+        ? contactsQuery.error.message
+        : 'Erro'
+    );
+  }, [
+    contactsQuery.isError,
+    contactsQuery.error,
+    contactsQuery.errorUpdatedAt,
+  ]);
 
-  const handleTypesLoaded = useCallback((next: ContactTypeOption[]) => {
-    setTypes(next)
-  }, [])
-
-  const create = async () => {
-    if (!phone.trim()) {
-      toast.error('Telefone obrigatório')
-      return
-    }
-    const res = await apiFetch('/api/contacts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, name: name || undefined }),
-    })
-    if (!res.ok) {
-      toast.error('Falha ao criar')
-      return
-    }
-    setPhone('')
-    setName('')
-    toast.success('Contato criado')
-    void load()
-  }
-
-  const toggleBlock = async (c: ContactRow) => {
-    const blocked = Boolean(c.blocked_at)
-    const res = await apiFetch(`/api/contacts/${c.id}/block`, {
-      method: blocked ? 'DELETE' : 'POST',
-    })
-    if (!res.ok) {
-      toast.error(blocked ? 'Falha ao desbloquear' : 'Falha ao bloquear')
-      return
-    }
-    toast.success(blocked ? 'Contato desbloqueado' : 'Contato na blacklist')
-    void load()
-  }
-
-  const remove = async (id: string) => {
-    const res = await apiFetch(`/api/contacts/${id}`, { method: 'DELETE' })
-    if (!res.ok) {
-      toast.error('Falha ao remover')
-      return
-    }
-    toast.success('Removido')
-    void load()
-  }
+  useEffect(() => {
+    if (!typesQuery.isError) return;
+    toast.error(
+      typesQuery.error instanceof Error ? typesQuery.error.message : 'Erro'
+    );
+  }, [typesQuery.isError, typesQuery.error, typesQuery.errorUpdatedAt]);
 
   return (
     <div className="space-y-4 p-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Contatos</h1>
-        <span className="text-sm text-muted-foreground">{totalCount} total</span>
-      </div>
-
-      <ContactTypePanel
-        canEdit={canEdit}
-        onTypesLoaded={handleTypesLoaded}
-        onChange={() => void load()}
-      />
-
-      <div className="flex flex-wrap gap-2">
-        <div className="relative min-w-[200px] flex-1">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            className="pl-8"
-            placeholder="Buscar…"
-            value={search}
-            onChange={(e) => {
-              setPage(0)
-              setSearch(e.target.value)
-            }}
-          />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-baseline gap-3">
+          <h1 className="text-2xl font-semibold">Contatos</h1>
+          {contactsQuery.data ? (
+            <span className="text-muted-foreground text-sm">
+              {totalCount} total
+            </span>
+          ) : null}
         </div>
-      </div>
-
-      {canEdit && (
-        <div className="flex flex-wrap gap-2 rounded-lg border border-border p-3">
-          <Input
-            placeholder="Telefone"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-          />
-          <Input
-            placeholder="Nome"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <Button onClick={() => void create()}>
-            <Plus className="mr-1 h-4 w-4" /> Adicionar
+        {canEdit && (
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus className="mr-1 h-4 w-4" /> Novo contato
           </Button>
-        </div>
+        )}
+      </div>
+
+      <div className="relative">
+        <Search className="text-muted-foreground absolute top-2.5 left-2 h-4 w-4" />
+        <Input
+          className="pl-8"
+          placeholder="Buscar nome, telefone ou e-mail"
+          value={search}
+          onChange={(e) => {
+            setPage(0);
+            setSearch(e.target.value);
+          }}
+        />
+      </div>
+
+      {typesQuery.isPending ? (
+        <p className="text-muted-foreground text-sm">Carregando tipos…</p>
+      ) : typesQuery.isError ? (
+        <p className="text-muted-foreground text-sm">Falha ao carregar tipos</p>
+      ) : (
+        <ContactTypePanel
+          canEdit={canEdit}
+          types={types}
+          creating={createType.isPending}
+          onCreate={(input) => createType.mutateAsync(input)}
+          onRemove={(id) => deleteType.mutate(id)}
+        />
       )}
 
-      {loading ? (
-        <div className="flex items-center gap-2 text-muted-foreground">
+      {contactsQuery.isPending ? (
+        <div className="text-muted-foreground flex items-center gap-2">
           <Loader2 className="h-4 w-4 animate-spin" /> Carregando…
         </div>
+      ) : contactsQuery.isError ? (
+        <p className="text-muted-foreground text-sm">Falha ao carregar</p>
       ) : (
         <Table>
           <TableHeader>
@@ -179,42 +144,63 @@ export default function ContactsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {contacts.map((c) => (
-              <TableRow key={c.id}>
-                <TableCell>{c.name || '—'}</TableCell>
-                <TableCell>{c.phone}</TableCell>
-                <TableCell>{c.email || '—'}</TableCell>
-                <TableCell>
-                  <ContactTypeSelect
-                    contactId={c.id}
-                    value={c.type?.id ?? null}
-                    types={types}
-                    disabled={!canEdit}
-                    onChange={() => void load()}
-                  />
-                </TableCell>
-                <TableCell className="text-right space-x-1">
-                  {canEdit && (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => void toggleBlock(c)}
-                      >
-                        {c.blocked_at ? 'Desbloquear' : 'Blacklist'}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => void remove(c.id)}
-                      >
-                        Remover
-                      </Button>
-                    </>
-                  )}
+            {contacts.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5} className="text-muted-foreground">
+                  Nenhum contato encontrado.
                 </TableCell>
               </TableRow>
-            ))}
+            ) : (
+              contacts.map((c) => (
+                <TableRow key={c.id}>
+                  <TableCell>
+                    <span className="inline-flex items-center gap-2">
+                      {c.name || '—'}
+                      {c.blocked_at ? (
+                        <Badge variant="destructive">Bloqueado</Badge>
+                      ) : null}
+                    </span>
+                  </TableCell>
+                  <TableCell>{c.phone}</TableCell>
+                  <TableCell>{c.email || '—'}</TableCell>
+                  <TableCell>
+                    <ContactTypeSelect
+                      value={c.type?.id ?? null}
+                      types={types}
+                      disabled={!canEdit || assignType.isPending}
+                      onAssign={(typeId) =>
+                        assignType.mutate({ contactId: c.id, typeId })
+                      }
+                    />
+                  </TableCell>
+                  <TableCell className="space-x-1 text-right">
+                    {canEdit && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            toggleBlock.mutate({
+                              id: c.id,
+                              blocked: Boolean(c.blocked_at),
+                            })
+                          }
+                        >
+                          {c.blocked_at ? 'Desbloquear' : 'Blacklist'}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => remove.mutate(c.id)}
+                        >
+                          Remover
+                        </Button>
+                      </>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       )}
@@ -222,19 +208,25 @@ export default function ContactsPage() {
       <div className="flex gap-2">
         <Button
           variant="outline"
-          disabled={page === 0}
+          disabled={page === 0 || contactsQuery.isPending}
           onClick={() => setPage((p) => p - 1)}
         >
           Anterior
         </Button>
         <Button
           variant="outline"
-          disabled={(page + 1) * 25 >= totalCount}
+          disabled={
+            (page + 1) * PAGE_SIZE >= totalCount || contactsQuery.isPending
+          }
           onClick={() => setPage((p) => p + 1)}
         >
           Próxima
         </Button>
       </div>
+
+      {canEdit && (
+        <CreateContactDialog open={createOpen} onOpenChange={setCreateOpen} />
+      )}
     </div>
-  )
+  );
 }

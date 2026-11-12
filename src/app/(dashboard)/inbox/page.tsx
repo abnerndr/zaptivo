@@ -14,7 +14,11 @@ import {
   useSendMessage,
   useSyncWhatsapp,
 } from '@/hooks/inbox/use-inbox-mutations'
-import { inboxKeys, type InboxContact } from '@/hooks/inbox/types'
+import {
+  inboxKeys,
+  type InboxContact,
+  type InboxConversation,
+} from '@/hooks/inbox/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -42,6 +46,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { messageBubble } from '@/domain/inbox/message-bubble'
+import { buildInboxStartResults } from '@/domain/inbox/start-chat'
 import { outgoingMediaKind } from '@/domain/inbox/outgoing-media'
 import { uploadAccountMedia } from '@/domain/storage/upload-media'
 
@@ -134,6 +139,21 @@ export default function InboxPage() {
   const [saveName, setSaveName] = useState('')
   const [savingContact, setSavingContact] = useState(false)
 
+  const [query, setQuery] = useState('')
+  const [contactHits, setContactHits] = useState<
+    Array<{
+      id: string
+      name: string | null
+      phone: string
+      avatar_url: string | null
+    }>
+  >([])
+  const [searchingContacts, setSearchingContacts] = useState(false)
+  const [openingChat, setOpeningChat] = useState(false)
+  const searchGen = useRef(0)
+  const composerRef = useRef<HTMLInputElement | null>(null)
+  const focusComposerRef = useRef(false)
+
   const {
     data: conversations = [],
     isLoading: loadingConversations,
@@ -167,6 +187,60 @@ export default function InboxPage() {
   const syncBusyRef = useRef(false)
   const sseConnectedRef = useRef(sseConnected)
   sseConnectedRef.current = sseConnected
+
+  useEffect(() => {
+    const q = query.trim()
+    if (q.length < 2) {
+      setContactHits([])
+      setSearchingContacts(false)
+      return
+    }
+    const gen = ++searchGen.current
+    setSearchingContacts(true)
+    const timer = setTimeout(() => {
+      void apiFetch(`/api/contacts?q=${encodeURIComponent(q)}&pageSize=20`)
+        .then(async (res) => {
+          const data = (await res.json().catch(() => ({}))) as {
+            error?: string
+            contacts?: Array<{
+              id: string
+              name: string | null
+              phone: string
+              avatar_url: string | null
+            }>
+          }
+          if (!res.ok) throw new Error(data.error ?? 'Falha ao buscar contatos')
+          return data.contacts ?? []
+        })
+        .then((contacts) => {
+          if (searchGen.current !== gen) return
+          setContactHits(contacts)
+        })
+        .catch((err: unknown) => {
+          if (searchGen.current !== gen) return
+          setContactHits([])
+          toast.error(
+            err instanceof Error ? err.message : 'Falha ao buscar contatos',
+          )
+        })
+        .finally(() => {
+          if (searchGen.current === gen) setSearchingContacts(false)
+        })
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [query])
+
+  const results = useMemo(
+    () => buildInboxStartResults({ query, conversations, contacts: contactHits }),
+    [query, conversations, contactHits],
+  )
+  const visibleConversations = query.trim() ? results.conversations : conversations
+
+  useEffect(() => {
+    if (!focusComposerRef.current || !selected) return
+    focusComposerRef.current = false
+    composerRef.current?.focus()
+  }, [selected, conversations])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -316,6 +390,42 @@ export default function InboxPage() {
     setSelected(id)
   }
 
+  const openChat = async (body: { contactId?: string; phone?: string }) => {
+    if (openingChat) return
+    setOpeningChat(true)
+    try {
+      const res = await apiFetch('/api/inbox/conversations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string
+        id?: string
+        created?: boolean
+      } & InboxConversation
+      if (!res.ok || !data.id) {
+        throw new Error(data.error ?? 'Falha ao abrir a conversa')
+      }
+      const { created: _created, ...conversation } = data
+      queryClient.setQueryData<InboxConversation[]>(
+        inboxKeys.conversations(),
+        (list) => {
+          const current = list ?? []
+          if (current.some((item) => item.id === conversation.id)) return current
+          return [conversation, ...current]
+        },
+      )
+      focusComposerRef.current = true
+      setSelected(conversation.id)
+      setQuery('')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Falha ao abrir a conversa')
+    } finally {
+      setOpeningChat(false)
+    }
+  }
+
   if (loadingConversations && conversations.length === 0) {
     return (
       <div className="flex h-full items-center justify-center gap-2 text-muted-foreground">
@@ -349,8 +459,22 @@ export default function InboxPage() {
         </Button>
       </div>
       <div className="flex min-h-0 flex-1">
-        <aside className="w-80 overflow-y-auto border-r border-border">
-          {conversations.map((c) => {
+        <aside className="flex w-80 min-h-0 flex-col border-r border-border">
+          <div className="border-b border-border bg-background p-2">
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar contato ou número"
+              aria-label="Buscar contato ou número"
+            />
+            {searchingContacts ? (
+              <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                <Loader2 className="size-3 animate-spin" /> Buscando contatos…
+              </p>
+            ) : null}
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+          {visibleConversations.map((c) => {
             const title = contactDisplayName(c.contact)
             const phoneLabel = formatWhatsAppPhone(c.contact?.phone)
             const showPhoneUnderName =
@@ -365,7 +489,10 @@ export default function InboxPage() {
                 className={`flex w-full gap-3 border-b border-border px-3 py-3 text-left hover:bg-muted ${
                   selected === c.id ? 'bg-muted' : ''
                 }`}
-                onClick={() => selectConversation(c.id)}
+                onClick={() => {
+                  setQuery('')
+                  selectConversation(c.id)
+                }}
               >
                 <ContactAvatar contact={c.contact} />
                 <div className="min-w-0 flex-1">
@@ -402,7 +529,46 @@ export default function InboxPage() {
               </button>
             )
           })}
-          {conversations.length === 0 && (
+          {query.trim()
+            ? results.contacts.map((contact) => (
+                <button
+                  key={contact.id}
+                  type="button"
+                  disabled={openingChat}
+                  className="flex w-full gap-3 border-b border-border px-3 py-3 text-left hover:bg-muted disabled:opacity-50"
+                  onClick={() => void openChat({ contactId: contact.id })}
+                >
+                  <ContactAvatar contact={contact} />
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium text-foreground">
+                      {contactDisplayName(contact)}
+                    </span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      Iniciar conversa
+                    </span>
+                  </span>
+                </button>
+              ))
+            : null}
+          {query.trim() && results.startPhone ? (
+            <button
+              type="button"
+              disabled={openingChat}
+              className="flex w-full border-b border-border px-3 py-3 text-left text-sm hover:bg-muted disabled:opacity-50"
+              onClick={() => void openChat({ phone: results.startPhone! })}
+            >
+              Iniciar conversa com {formatWhatsAppPhone(results.startPhone)}
+            </button>
+          ) : null}
+          {query.trim() &&
+          results.conversations.length === 0 &&
+          results.contacts.length === 0 &&
+          !results.startPhone ? (
+            <p className="p-4 text-sm text-muted-foreground">
+              Nenhum contato encontrado.
+            </p>
+          ) : null}
+          {!query.trim() && conversations.length === 0 ? (
             <div className="space-y-2 p-4 text-sm text-muted-foreground">
               <p>Nenhuma conversa ainda.</p>
               <p className="text-xs">
@@ -411,7 +577,8 @@ export default function InboxPage() {
                 localhost).
               </p>
             </div>
-          )}
+          ) : null}
+          </div>
         </aside>
         <main className="flex flex-1 flex-col">
           {selected && selectedContact ? (
@@ -556,6 +723,7 @@ export default function InboxPage() {
                   Anexo
                 </Button>
                 <Input
+                  ref={composerRef}
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   placeholder="Mensagem…"

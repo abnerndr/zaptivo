@@ -5,6 +5,109 @@ Não edite entradas antigas — só acrescente no topo (mais recente primeiro).
 
 ---
 
+## 2026-11-12 — busca de contato ou número na Inbox
+
+### O que foi feito
+
+- Campo "Buscar contato ou número" no topo da coluna da Inbox em `src/app/(dashboard)/inbox/page.tsx`.
+- Com 2+ caracteres, busca contatos salvos em `/api/contacts` (debounce de 300 ms; contador de geração descarta resposta velha, já que `apiFetch` não repassa `AbortSignal`).
+- Clique em contato ou no número digitado chama `POST /api/inbox/conversations`, insere a conversa no cache, seleciona e foca o compositor. Não envia mensagem.
+- Clique em uma conversa existente limpa a busca.
+
+### Por que
+
+- A Inbox só listava conversas já abertas. Não dava para achar um contato salvo nem começar um chat por telefone.
+
+### Onde revisar
+
+- `src/app/(dashboard)/inbox/page.tsx` (`openChat`, efeito da busca, `aside`)
+- Consome `buildInboxStartResults` (`src/domain/inbox/start-chat.ts`) e a rota `src/app/api/inbox/conversations/route.ts`
+
+### Impacto
+
+- [x] Frontend
+- [x] Backend
+- [ ] DB
+- [ ] Deploy
+- [ ] DX
+
+### Risco / Atenção
+
+- Tela não verificada no navegador (sem sessão logada nem servidor no ar).
+- ESLint acusa `react-hooks/set-state-in-effect` no efeito da busca (código do plano) e um `_created` não usado.
+
+### Como validar
+
+- `npx tsc --noEmit --pretty false`
+- `npx vitest run src/domain/inbox/start-chat.test.ts src/domain/inbox/open-conversation.test.ts src/app/api/inbox/conversations/route.test.ts`
+- Os cinco passos de "Como validar na tela" em `docs/superpowers/specs/2026-11-12-inbox-start-chat-design.md`
+
+---
+
+## 2026-11-12 — plano: iniciar chat pelo inbox
+
+### O que foi feito
+
+- Plano de implementação da busca no topo da Inbox, da abertura da conversa e do campo na página.
+
+### Por que
+
+- A spec foi aceita. O próximo passo é implementar sem inventar outro fluxo.
+
+### Onde revisar
+
+- `docs/superpowers/plans/2026-11-12-inbox-start-chat.md`
+
+### Impacto
+
+- [ ] Frontend
+- [ ] Backend
+- [ ] DB
+- [ ] Deploy
+- [x] DX
+
+### Risco / Atenção
+
+- Plano apenas. O prefixo `55` vale para o número digitado, não para o telefone já salvo no `contactId`.
+
+### Como validar
+
+- Revisão humana do plano antes da implementação.
+
+---
+
+## 2026-11-12 — spec: iniciar chat pelo inbox
+
+### O que foi feito
+
+- Spec da busca no topo da Inbox para abrir conversa de contato salvo ou de um número novo, sem enviar mensagem.
+
+### Por que
+
+- A Inbox só listava conversas já abertas. Não dava para achar um contato salvo nem começar um chat por telefone.
+
+### Onde revisar
+
+- `docs/superpowers/specs/2026-11-12-inbox-start-chat-design.md`
+
+### Impacto
+
+- [ ] Frontend
+- [ ] Backend
+- [ ] DB
+- [ ] Deploy
+- [x] DX
+
+### Risco / Atenção
+
+- Ainda é spec. Número local de 10 ou 11 dígitos será tratado como Brasil (`55`) na implementação.
+
+### Como validar
+
+- Revisão humana da spec antes do plano de implementação.
+
+---
+
 ## 2026-11-11 — avatar WuzAPI 500 no sync
 
 ### O que foi feito

@@ -5,6 +5,41 @@ Não edite entradas antigas — só acrescente no topo (mais recente primeiro).
 
 ---
 
+## 2026-11-12 — fix: conversas vazias não fixam o topo da Inbox
+
+### O que foi feito
+
+- `GET /api/inbox/conversations`: `orderBy` agora é `lastMessageAt desc nulls last`, depois `updatedAt desc`.
+- `POST`: JSON quebrado responde 400 `JSON inválido`; `contactId`/`phone` presentes e não-string respondem 400 `Informe contactId ou phone`, sem chamar `openInboxConversation`.
+- Testes de rota: assertiva de `nulls: 'last'`, JSON quebrado e `phone` numérico.
+
+### Por que
+
+- PostgreSQL põe NULL primeiro em DESC: conversa aberta sem mensagem ficava acima de todas e consumia o `take: 100`. Body inválido gerava 500.
+
+### Onde revisar
+
+- `orderBy` do GET e validação do body no POST em `src/app/api/inbox/conversations/route.ts`.
+
+### Impacto
+
+- [ ] Frontend
+- [x] Backend
+- [ ] DB
+- [ ] Deploy
+- [ ] DX
+
+### Risco / Atenção
+
+- Cliente continua inserindo a conversa recém-aberta no topo do cache React Query (intencional).
+- `null` em `contactId`/`phone` agora também é 400.
+
+### Como validar
+
+- `npx vitest run src/app/api/inbox/conversations/route.test.ts src/domain/inbox/open-conversation.test.ts src/domain/inbox/start-chat.test.ts` e `npx tsc --noEmit --pretty false`.
+
+---
+
 ## 2026-11-12 — fix: busca obsoleta e foco na Inbox
 
 ### O que foi feito

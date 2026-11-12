@@ -40,6 +40,14 @@ describe('GET /api/inbox/conversations', () => {
     expect(src).not.toContain('mergeOpenConversationsForContact')
     expect(src).not.toContain('lastFullDedupe')
   })
+
+  it('orders lastMessageAt with nulls last', () => {
+    const src = readFileSync(
+      resolve(process.cwd(), 'src/app/api/inbox/conversations/route.ts'),
+      'utf8',
+    )
+    expect(src).toContain("lastMessageAt: { sort: 'desc', nulls: 'last' }")
+  })
 })
 
 describe('POST /api/inbox/conversations', () => {
@@ -107,5 +115,41 @@ describe('POST /api/inbox/conversations', () => {
     )
     expect(res.status).toBe(403)
     expect(await res.json()).toEqual({ error: 'Contato na blacklist' })
+  })
+
+  it('returns 400 for broken JSON', async () => {
+    mocks.requireSessionAccount.mockResolvedValue({
+      accountId: 'acc',
+      role: 'agent',
+      profile: { orgRoleId: 'role' },
+    })
+    const { POST } = await import('./route')
+    const res = await POST(
+      new Request('http://local/api/inbox/conversations', {
+        method: 'POST',
+        body: '{not json',
+      }),
+    )
+    expect(res.status).toBe(400)
+    expect(await res.json()).toEqual({ error: 'JSON inválido' })
+    expect(mocks.openInboxConversation).not.toHaveBeenCalled()
+  })
+
+  it('returns 400 when phone is not a string', async () => {
+    mocks.requireSessionAccount.mockResolvedValue({
+      accountId: 'acc',
+      role: 'agent',
+      profile: { orgRoleId: 'role' },
+    })
+    const { POST } = await import('./route')
+    const res = await POST(
+      new Request('http://local/api/inbox/conversations', {
+        method: 'POST',
+        body: JSON.stringify({ phone: 11999990000 }),
+      }),
+    )
+    expect(res.status).toBe(400)
+    expect(await res.json()).toEqual({ error: 'Informe contactId ou phone' })
+    expect(mocks.openInboxConversation).not.toHaveBeenCalled()
   })
 })

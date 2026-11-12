@@ -19,7 +19,7 @@ export async function GET(req: Request) {
         accountId: ctx.accountId,
         ...(status ? { status } : { status: { not: 'closed' } }),
       },
-      orderBy: { lastMessageAt: 'desc' },
+      orderBy: [{ lastMessageAt: { sort: 'desc', nulls: 'last' } }, { updatedAt: 'desc' }],
       take: 100,
       include: { contact: true },
     })
@@ -66,11 +66,25 @@ export async function POST(req: Request) {
     ) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
-    const body = (await req.json()) as { contactId?: string; phone?: string }
+    let body: { contactId?: unknown; phone?: unknown }
+    try {
+      body = (await req.json()) as { contactId?: unknown; phone?: unknown }
+    } catch {
+      return NextResponse.json({ error: 'JSON inválido' }, { status: 400 })
+    }
+    const isInvalidField = (v: unknown) => v !== undefined && typeof v !== 'string'
+    if (
+      !body ||
+      typeof body !== 'object' ||
+      isInvalidField(body.contactId) ||
+      isInvalidField(body.phone)
+    ) {
+      return NextResponse.json({ error: 'Informe contactId ou phone' }, { status: 400 })
+    }
     const opened = await openInboxConversation({
       accountId: ctx.accountId,
-      contactId: body.contactId,
-      phone: body.phone,
+      contactId: body.contactId as string | undefined,
+      phone: body.phone as string | undefined,
     })
     return NextResponse.json(opened)
   } catch (err) {

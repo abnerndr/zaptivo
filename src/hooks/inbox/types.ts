@@ -12,6 +12,8 @@ export type InboxContact = {
   id: string
   name: string | null
   phone: string
+  email?: string | null
+  company?: string | null
   avatar_url: string | null
 }
 

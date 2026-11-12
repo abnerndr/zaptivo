@@ -20,6 +20,7 @@ import {
   ContactTypeSelect,
 } from '@/components/contacts/contact-type-panel';
 import { CreateContactDialog } from '@/components/contacts/create-contact-dialog';
+import { ContactTypeFilter } from '@/components/contacts/contact-type-filter';
 import {
   useAssignContactTypeMutation,
   useContactTypesQuery,
@@ -28,6 +29,7 @@ import {
   useDeleteContactMutation,
   useDeleteContactTypeMutation,
   useToggleBlockContactMutation,
+  type ContactRow,
 } from '@/lib/api/hooks';
 
 const PAGE_SIZE = 25;
@@ -37,7 +39,9 @@ export default function ContactsPage() {
   const [search, setSearch] = useState('');
   const deferredSearch = useDeferredValue(search);
   const [page, setPage] = useState(0);
+  const [typeId, setTypeId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [editing, setEditing] = useState<ContactRow | null>(null);
 
   const params = useMemo(() => {
     const qs = new URLSearchParams({
@@ -46,8 +50,9 @@ export default function ContactsPage() {
     });
     const q = deferredSearch.trim();
     if (q) qs.set('q', q);
+    if (typeId) qs.set('typeId', typeId);
     return qs;
-  }, [page, deferredSearch]);
+  }, [page, deferredSearch, typeId]);
 
   const contactsQuery = useContactsQuery(params);
   const typesQuery = useContactTypesQuery();
@@ -93,7 +98,12 @@ export default function ContactsPage() {
           ) : null}
         </div>
         {canEdit && (
-          <Button onClick={() => setCreateOpen(true)}>
+          <Button
+            onClick={() => {
+              setEditing(null);
+              setCreateOpen(true);
+            }}
+          >
             <Plus className="mr-1 h-4 w-4" /> Novo contato
           </Button>
         )}
@@ -112,6 +122,15 @@ export default function ContactsPage() {
         />
       </div>
 
+      <ContactTypeFilter
+        types={types}
+        value={typeId}
+        onChange={(next) => {
+          setPage(0);
+          setTypeId(next);
+        }}
+      />
+
       {typesQuery.isPending ? (
         <p className="text-muted-foreground text-sm">Carregando tipos…</p>
       ) : typesQuery.isError ? (
@@ -122,7 +141,13 @@ export default function ContactsPage() {
           types={types}
           creating={createType.isPending}
           onCreate={(input) => createType.mutateAsync(input)}
-          onRemove={(id) => deleteType.mutate(id)}
+          onRemove={(id) => {
+            if (typeId === id) {
+              setPage(0);
+              setTypeId(null);
+            }
+            deleteType.mutate(id);
+          }}
         />
       )}
 
@@ -179,6 +204,16 @@ export default function ContactsPage() {
                         <Button
                           variant="ghost"
                           size="sm"
+                          onClick={() => {
+                            setCreateOpen(false);
+                            setEditing(c);
+                          }}
+                        >
+                          Editar
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() =>
                             toggleBlock.mutate({
                               id: c.id,
@@ -225,7 +260,17 @@ export default function ContactsPage() {
       </div>
 
       {canEdit && (
-        <CreateContactDialog open={createOpen} onOpenChange={setCreateOpen} />
+        <CreateContactDialog
+          key={editing?.id ?? 'new'}
+          open={createOpen || editing !== null}
+          contact={editing}
+          onOpenChange={(next) => {
+            if (!next) {
+              setCreateOpen(false);
+              setEditing(null);
+            }
+          }}
+        />
       )}
     </div>
   );

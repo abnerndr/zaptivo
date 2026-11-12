@@ -34,9 +34,16 @@ export type ContactsPage = {
 
 export type CreateContactInput = {
   phone: string;
-  name?: string;
+  name: string;
   email?: string;
   company?: string;
+};
+
+export type UpdateContactInput = {
+  id: string;
+  name: string;
+  email: string | null;
+  company: string | null;
 };
 
 export const queryKeys = {
@@ -136,7 +143,7 @@ export function useCreateContactMutation() {
     mutationFn: async (input: CreateContactInput) => {
       const { data } = await api.post('/api/contacts', {
         phone: input.phone,
-        ...(input.name ? { name: input.name } : {}),
+        name: input.name,
         ...(input.email ? { email: input.email } : {}),
         ...(input.company ? { company: input.company } : {}),
       });
@@ -154,6 +161,33 @@ export function useCreateContactMutation() {
     },
     onError: () => {
       toast.error('Falha ao criar');
+    },
+  });
+}
+
+export function useUpdateContactMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: UpdateContactInput) => {
+      const { data } = await api.patch(`/api/contacts/${input.id}`, {
+        name: input.name,
+        email: input.email,
+        company: input.company,
+      });
+      return data as {
+        id: string;
+        name: string | null;
+        phone: string;
+        email: string | null;
+        company: string | null;
+      };
+    },
+    onSuccess: () => {
+      toast.success('Contato atualizado');
+      invalidateContacts(qc);
+    },
+    onError: () => {
+      toast.error('Falha ao atualizar');
     },
   });
 }

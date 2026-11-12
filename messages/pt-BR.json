@@ -219,8 +219,9 @@
       "removeAttachment": "Remove attachment",
       "moreActions": "More",
       "interactiveMessage": "Interactive message",
-      "quickReplies": "Quick replies",
-      "quickRepliesEmpty": "No quick replies yet. Add some in Settings → Quick replies.",
+      "quickReplies": "Modelos de mensagem",
+      "quickRepliesEmpty": "Nenhum modelo de texto. Crie um em Configurações → Modelos da inbox.",
+      "quickRepliesError": "Não foi possível carregar os modelos. Feche e tente novamente.",
       "saveAsQuickReply": "Save as quick reply",
       "send": "Send",
       "quickReplyNamePrompt": "Name this quick reply:",
@@ -1540,7 +1541,7 @@
       "deals": "Negócios e moeda",
       "members": "Membros da equipe",
       "api": "Chaves de API",
-      "quickReplies": "Respostas rápidas",
+      "quickReplies": "Modelos da inbox",
       "roles": "Cargos e permissões"
     },
     "groups": {

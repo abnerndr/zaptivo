@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/dialog'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { StatusIcon } from '@/components/inbox/status-icon'
+import { QuickReplyPicker } from '@/components/inbox/quick-reply-picker'
 import {
   contactDisplayName,
   formatWhatsAppPhone,
@@ -40,6 +41,7 @@ import {
 import {
   Loader2,
   Paperclip,
+  MessageSquareText,
   RefreshCw,
   UserPlus,
   UserRoundPen,
@@ -48,6 +50,10 @@ import { toast } from 'sonner'
 import { messageBubble } from '@/domain/inbox/message-bubble'
 import { buildInboxStartResults } from '@/domain/inbox/start-chat'
 import { outgoingMediaKind } from '@/domain/inbox/outgoing-media'
+import {
+  inboxMessageVariables,
+  renderInboxMessage,
+} from '@/domain/inbox/message-variables'
 import { uploadAccountMedia } from '@/domain/storage/upload-media'
 
 function formatMessageTime(iso: string): string {
@@ -132,6 +138,7 @@ export default function InboxPage() {
   const queryClient = useQueryClient()
   const [selected, setSelected] = useState<string | null>(null)
   const [text, setText] = useState('')
+  const [modelsOpen, setModelsOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -151,7 +158,7 @@ export default function InboxPage() {
   }>({ query: '', contacts: [] })
   const [openingChat, setOpeningChat] = useState(false)
   const searchGen = useRef(0)
-  const composerRef = useRef<HTMLInputElement | null>(null)
+  const composerRef = useRef<HTMLTextAreaElement | null>(null)
   const focusComposerRef = useRef(false)
 
   const {
@@ -177,6 +184,20 @@ export default function InboxPage() {
   )
   const selectedContact = selectedConversation?.contact ?? null
   const hasSavedName = Boolean(selectedContact?.name?.trim())
+  const preview = renderInboxMessage(text, selectedContact)
+  const invalidVariables = [...preview.missing, ...preview.unknown]
+
+  const insertVariable = (key: string) => {
+    const input = composerRef.current
+    const start = input?.selectionStart ?? text.length
+    const end = input?.selectionEnd ?? start
+    const token = `{{${key}}}`
+    setText(text.slice(0, start) + token + text.slice(end))
+    requestAnimationFrame(() => {
+      input?.focus()
+      input?.setSelectionRange(start + token.length, start + token.length)
+    })
+  }
 
   const sseConnected = useInboxRealtime(accountId, {
     onConversationMoved: (from, to) => {
@@ -346,18 +367,27 @@ export default function InboxPage() {
 
   const send = () => {
     if (!selected || !text.trim() || sendMutation.isPending) return
+    if (invalidVariables.length) {
+      toast.error('Preencha os dados do contato ou corrija as variáveis antes de enviar')
+      return
+    }
     const content = text.trim()
     const tempId = `tmp-${Date.now()}`
     setText('')
-    sendMutation.mutate({
-      conversationId: selected,
-      content,
-      tempId,
-    })
+    sendMutation.mutate(
+      { conversationId: selected, content, tempId, optimisticContent: preview.text.trim() },
+      { onError: () => {
+        if (selectedRef.current === selected) setText((current) => current || content)
+      } },
+    )
   }
 
   const sendFile = async (file: File) => {
     if (!selected || uploading) return
+    if (invalidVariables.length) {
+      toast.error('Preencha os dados do contato ou corrija as variáveis antes de enviar')
+      return
+    }
     const kind = outgoingMediaKind(file)
     if ('error' in kind) {
       toast.error(kind.error)
@@ -368,14 +398,20 @@ export default function InboxPage() {
       const { publicUrl } = await uploadAccountMedia('chat-media', file)
       const caption = text.trim()
       setText('')
-      sendMutation.mutate({
-        conversationId: selected,
-        content: caption,
-        tempId: `tmp-${Date.now()}`,
-        messageType: kind.messageType,
-        mediaUrl: publicUrl,
-        filename: file.name,
-      })
+      sendMutation.mutate(
+        {
+          conversationId: selected,
+          content: caption,
+          tempId: `tmp-${Date.now()}`,
+          messageType: kind.messageType,
+          mediaUrl: publicUrl,
+          filename: file.name,
+          optimisticContent: preview.text.trim(),
+        },
+        { onError: () => {
+          if (selectedRef.current === selected) setText((current) => current || caption)
+        } },
+      )
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : 'Falha ao enviar o arquivo',
@@ -645,7 +681,7 @@ export default function InboxPage() {
                       }`}
                     >
                       <div
-                        className={`rounded-lg px-3 py-2 text-sm ${
+                        className={`whitespace-pre-wrap rounded-lg px-3 py-2 text-sm ${
                           outgoing
                             ? 'bg-primary text-primary-foreground'
                             : 'border border-border bg-card text-card-foreground'
@@ -699,50 +735,90 @@ export default function InboxPage() {
                 })}
                 <div ref={messagesEndRef} />
               </div>
-              <div className="flex gap-2 border-t border-border p-3">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  className="sr-only"
-                  tabIndex={-1}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    e.target.value = ''
-                    if (file) void sendFile(file)
-                  }}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={uploading}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  {uploading ? (
-                    <Loader2 className="mr-2 size-4 animate-spin" />
-                  ) : (
-                    <Paperclip className="mr-2 size-4" />
-                  )}
-                  Anexo
-                </Button>
-                <Input
-                  ref={composerRef}
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  placeholder="Mensagem…"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') send()
-                  }}
-                />
-                <Button
-                  onClick={send}
-                  disabled={sendMutation.isPending}
-                >
-                  {sendMutation.isPending ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    'Enviar'
-                  )}
-                </Button>
+              <div className="border-t border-border p-3">
+                <details className="mb-2 text-xs text-muted-foreground">
+                  <summary className="cursor-pointer">Variáveis do contato</summary>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {inboxMessageVariables.map(({ key, label }) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => insertVariable(key)}
+                        className="rounded border border-border px-2 py-1 hover:bg-muted"
+                        title={`Inserir ${label}`}
+                      >
+                        {label} {'{{'}{key}{'}}'}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-2">
+                    Os valores vêm do cadastro do contato; nome e telefone podem vir do WhatsApp.
+                  </p>
+                </details>
+                {preview.hasVariables ? (
+                  <p
+                    className={`mb-2 break-words text-xs ${invalidVariables.length ? 'text-destructive' : 'text-muted-foreground'}`}
+                    aria-live="polite"
+                  >
+                    {invalidVariables.length
+                      ? `Sem valor ou desconhecidas: ${invalidVariables.map((key) => `{{${key}}}`).join(', ')}`
+                      : `Prévia: ${preview.text}`}
+                  </p>
+                ) : null}
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" onClick={() => setModelsOpen(true)} title="Inserir modelo de mensagem" aria-label="Inserir modelo de mensagem">
+                    <MessageSquareText className="size-4" />
+                  </Button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="sr-only"
+                    tabIndex={-1}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      e.target.value = ''
+                      if (file) void sendFile(file)
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={uploading}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    {uploading ? (
+                      <Loader2 className="mr-2 size-4 animate-spin" />
+                    ) : (
+                      <Paperclip className="mr-2 size-4" />
+                    )}
+                    Anexo
+                  </Button>
+                  <textarea
+                    ref={composerRef}
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    placeholder="Mensagem…"
+                    aria-label="Mensagem"
+                    rows={2}
+                    className="min-w-0 flex-1 resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                        e.preventDefault()
+                        send()
+                      }
+                    }}
+                  />
+                  <Button
+                    onClick={send}
+                    disabled={sendMutation.isPending}
+                  >
+                    {sendMutation.isPending ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      'Enviar'
+                    )}
+                  </Button>
+                </div>
               </div>
             </>
           ) : (
@@ -752,6 +828,18 @@ export default function InboxPage() {
           )}
         </main>
       </div>
+
+      <QuickReplyPicker
+        open={modelsOpen}
+        onOpenChange={setModelsOpen}
+        textOnly
+        onPick={(reply) => {
+          const content = reply.content_text ?? ''
+          setText((current) => current ? `${current}\n${content}` : content)
+          setModelsOpen(false)
+          requestAnimationFrame(() => composerRef.current?.focus())
+        }}
+      />
 
       <Dialog open={saveOpen} onOpenChange={setSaveOpen}>
         <DialogContent className="sm:max-w-md">

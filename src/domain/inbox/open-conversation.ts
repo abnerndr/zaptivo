@@ -23,6 +23,8 @@ export type OpenedInboxConversation = {
     id: string
     name: string | null
     phone: string
+    email: string | null
+    company: string | null
     avatar_url: string | null
   } | null
   created: boolean
@@ -97,6 +99,8 @@ export async function openInboxConversation(args: {
           id: conversation.contact.id,
           name: conversation.contact.name,
           phone: conversation.contact.phone,
+          email: conversation.contact.email,
+          company: conversation.contact.company,
           avatar_url: conversation.contact.avatarUrl,
         }
       : null,

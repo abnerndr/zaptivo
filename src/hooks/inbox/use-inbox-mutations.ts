@@ -110,6 +110,7 @@ export function useSendMessage() {
       messageType?: 'text' | 'image' | 'audio' | 'video' | 'document'
       mediaUrl?: string
       filename?: string
+      optimisticContent?: string
     }) => {
       if (!args.content.trim() && !args.mediaUrl) {
         throw new Error('Mensagem vazia')
@@ -123,6 +124,7 @@ export function useSendMessage() {
           content_text: args.content || null,
           media_url: args.mediaUrl ?? null,
           filename: args.filename ?? null,
+          render_inbox_variables: true,
         }),
       })
       const data = (await res.json().catch(() => ({}))) as {
@@ -145,6 +147,7 @@ export function useSendMessage() {
       messageType,
       mediaUrl,
       filename,
+      optimisticContent,
     }) => {
       await queryClient.cancelQueries({
         queryKey: inboxKeys.messages(conversationId),
@@ -155,7 +158,7 @@ export function useSendMessage() {
       const optimistic: InboxMessage = {
         id: tempId,
         sender_type: 'agent',
-        content_text: content || null,
+        content_text: optimisticContent || content || null,
         content_type: messageType ?? 'text',
         media_url: mediaUrl ?? null,
         status: 'sending',
@@ -170,7 +173,7 @@ export function useSendMessage() {
         (list) =>
           list?.map((c) =>
             c.id === conversationId
-              ? { ...c, last_message_text: content || filename || null }
+              ? { ...c, last_message_text: optimisticContent || content || filename || null }
               : c,
           ),
       )
@@ -187,6 +190,14 @@ export function useSendMessage() {
             status: data.status ?? 'sent',
             createdAt: data.createdAt ?? new Date().toISOString(),
           }),
+      )
+      queryClient.setQueryData<InboxConversation[]>(
+        inboxKeys.conversations(),
+        (list) => list?.map((c) =>
+          c.id === vars.conversationId && c.last_message_text === (vars.optimisticContent || vars.content || vars.filename || null)
+            ? { ...c, last_message_text: data.contentText ?? c.last_message_text }
+            : c,
+        ),
       )
     },
     onError: (err, vars, ctx) => {

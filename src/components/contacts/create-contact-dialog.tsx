@@ -14,28 +14,37 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useCreateContactMutation } from '@/lib/api/hooks';
+import {
+  useCreateContactMutation,
+  useUpdateContactMutation,
+  type ContactRow,
+} from '@/lib/api/hooks';
 
 type CreateContactDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  contact?: ContactRow | null;
 };
 
 export function CreateContactDialog({
   open,
   onOpenChange,
+  contact = null,
 }: CreateContactDialogProps) {
+  const editing = contact != null;
   const create = useCreateContactMutation();
-  const [phone, setPhone] = useState('');
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [company, setCompany] = useState('');
+  const update = useUpdateContactMutation();
+  const pending = create.isPending || update.isPending;
+  const [phone, setPhone] = useState(contact?.phone ?? '');
+  const [name, setName] = useState(contact?.name ?? '');
+  const [email, setEmail] = useState(contact?.email ?? '');
+  const [company, setCompany] = useState(contact?.company ?? '');
 
   const reset = () => {
-    setPhone('');
-    setName('');
-    setEmail('');
-    setCompany('');
+    setPhone(contact?.phone ?? '');
+    setName(contact?.name ?? '');
+    setEmail(contact?.email ?? '');
+    setCompany(contact?.company ?? '');
   };
 
   const close = (next: boolean) => {
@@ -44,18 +53,40 @@ export function CreateContactDialog({
   };
 
   const submit = async () => {
-    if (!phone.trim()) {
+    const trimmedName = name.trim();
+    const trimmedPhone = phone.trim();
+    if (!trimmedName && !editing && !trimmedPhone) {
+      toast.error('Nome e telefone são obrigatórios');
+      return;
+    }
+    if (!trimmedName) {
+      toast.error('Nome obrigatório');
+      return;
+    }
+    if (!editing && !trimmedPhone) {
       toast.error('Telefone obrigatório');
       return;
     }
+
+    const emailValue = email.trim() || null;
+    const companyValue = company.trim() || null;
+
     try {
-      await create.mutateAsync({
-        phone: phone.trim(),
-        name: name.trim() || undefined,
-        email: email.trim() || undefined,
-        company: company.trim() || undefined,
-      });
-      reset();
+      if (editing && contact) {
+        await update.mutateAsync({
+          id: contact.id,
+          name: trimmedName,
+          email: emailValue,
+          company: companyValue,
+        });
+      } else {
+        await create.mutateAsync({
+          phone: trimmedPhone,
+          name: trimmedName,
+          email: emailValue ?? undefined,
+          company: companyValue ?? undefined,
+        });
+      }
       onOpenChange(false);
     } catch {
       // O hook já mostra o toast de erro.
@@ -66,9 +97,13 @@ export function CreateContactDialog({
     <Dialog open={open} onOpenChange={close}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Novo contato</DialogTitle>
+          <DialogTitle>
+            {editing ? 'Editar contato' : 'Novo contato'}
+          </DialogTitle>
           <DialogDescription>
-            Telefone é obrigatório. Nome, e-mail e empresa são opcionais.
+            {editing
+              ? 'O telefone não pode ser alterado. Nome é obrigatório.'
+              : 'Nome e telefone são obrigatórios. E-mail e empresa são opcionais.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -80,16 +115,6 @@ export function CreateContactDialog({
           }}
         >
           <div className="grid gap-1.5">
-            <Label htmlFor="contact-phone">Telefone</Label>
-            <Input
-              id="contact-phone"
-              placeholder="5511999999999"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              autoComplete="tel"
-            />
-          </div>
-          <div className="grid gap-1.5">
             <Label htmlFor="contact-name">Nome</Label>
             <Input
               id="contact-name"
@@ -97,6 +122,20 @@ export function CreateContactDialog({
               value={name}
               onChange={(e) => setName(e.target.value)}
               autoComplete="name"
+              required
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="contact-phone">Telefone</Label>
+            <Input
+              id="contact-phone"
+              placeholder="5511999999999"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              autoComplete="tel"
+              required={!editing}
+              disabled={editing}
+              readOnly={editing}
             />
           </div>
           <div className="grid gap-1.5">
@@ -129,10 +168,8 @@ export function CreateContactDialog({
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={create.isPending}>
-              {create.isPending && (
-                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-              )}
+            <Button type="submit" disabled={pending}>
+              {pending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
               Salvar
             </Button>
           </DialogFooter>

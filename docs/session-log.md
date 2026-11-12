@@ -5,6 +5,154 @@ Não edite entradas antigas — só acrescente no topo (mais recente primeiro).
 
 ---
 
+## 2026-11-12 — modelos de mensagem na inbox
+
+### O que foi feito
+
+- A seção existente de respostas rápidas passou a se chamar **Modelos da inbox**, com criação, edição e exclusão de textos e inserção das variáveis do contato.
+- A API de respostas rápidas passou a persistir os modelos por conta e a verificar a permissão de envio em operações de escrita.
+- A inbox permite selecionar modelos de texto, preserva o rascunho existente e aceita mensagens com várias linhas.
+
+### Por que
+
+- Permitir que a equipe mantenha textos reutilizáveis com variáveis em configurações e os use nas conversas.
+
+### Onde revisar
+
+- `src/components/settings/quick-replies-manager.tsx`, `src/app/api/quick-replies/` e `src/components/inbox/quick-reply-picker.tsx`.
+
+### Impacto
+
+- [x] Frontend
+- [x] Backend
+- [ ] DB
+- [ ] Deploy
+- [ ] DX
+
+### Risco / Atenção
+
+- A tabela `quick_replies` existente é usada para os modelos. A inbox atual oferece apenas modelos de texto; modelos interativos não aparecem no seletor.
+- Variáveis são preenchidas com os dados do contato na hora do envio; dados ausentes impedem o envio.
+
+### Como validar
+
+- Em Configurações → Modelos da inbox, criar ou editar um texto com `{{first_name}}`.
+- Na inbox, escolher o modelo, conferir a prévia e enviar para um contato com nome.
+- `pnpm exec vitest run src/app/api/quick-replies/route.test.ts src/domain/inbox/message-variables.test.ts src/domain/whatsapp/send-message-variables.test.ts`
+
+---
+
+## 2026-11-12 — variáveis do contato na inbox
+
+### O que foi feito
+
+- A inbox oferece inserção e prévia de `{{name}}`, `{{first_name}}`, `{{phone}}`, `{{email}}` e `{{company}}`.
+- O servidor resolve os valores do contato da conversa antes de enviar e persistir a mensagem; variáveis desconhecidas ou sem valor impedem o envio.
+- O rascunho é recuperado após falha de envio quando o atendente ainda está na conversa.
+
+### Por que
+
+- Facilitar o uso de textos reutilizáveis personalizados com os dados disponíveis no CRM e no WhatsApp.
+
+### Onde revisar
+
+- `src/domain/inbox/message-variables.ts`, `src/domain/whatsapp/send-message.ts` e `src/app/(dashboard)/inbox/page.tsx`.
+
+### Impacto
+
+- [x] Frontend
+- [x] Backend
+- [ ] DB
+- [ ] Deploy
+- [ ] DX
+
+### Risco / Atenção
+
+- Nome e telefone dependem dos dados recebidos do WhatsApp ou salvos no contato; e-mail e empresa dependem do cadastro. Um ID interno do WhatsApp não é apresentado como telefone.
+- A substituição é habilitada pelos envios da inbox; outros clientes do serviço mantêm seu comportamento anterior.
+
+### Como validar
+
+- Na inbox, escrever `Olá {{first_name}}`, conferir a prévia e enviar para um contato com nome.
+- Experimentar uma variável sem valor e confirmar que o envio é impedido.
+- `pnpm exec vitest run src/domain/inbox/message-variables.test.ts src/domain/whatsapp/send-message-variables.test.ts src/app/api/whatsapp/send/route.test.ts`
+
+---
+
+## 2026-11-12 — contatos: filtro por tipo
+
+### O que foi feito
+
+- A página de contatos ganhou filtros **Todos**, cada tipo de lead e **Sem tipo**, logo abaixo da busca.
+- `GET /api/contacts?typeId=none` lista só contatos sem tipo. Um UUID continua filtrando aquele tipo.
+
+### Por que
+
+- A lista misturava todos os contatos e a API já filtrava por tipo, mas a tela não oferecia o filtro.
+
+### Onde revisar
+
+- Filtros em `src/components/contacts/contact-type-filter.tsx` e o `typeId` da query em `src/app/(dashboard)/contacts/page.tsx`.
+- Ramo `none` em `src/app/api/contacts/route.ts`.
+
+### Impacto
+
+- [x] Frontend
+- [x] Backend
+- [ ] DB
+- [ ] Deploy
+- [ ] DX
+
+### Risco / Atenção
+
+- Apagar o tipo que está selecionado volta o filtro para **Todos**.
+- `typeId` que não é UUID nem `none` continua respondendo 400.
+
+### Como validar
+
+- `npx vitest run src/app/api/contacts/type-filter.test.ts`
+- Em `/contacts`, clicar um tipo mostra só esses contatos; **Sem tipo** mostra os sem classificação; **Todos** limpa o filtro.
+
+---
+
+## 2026-11-12 — contatos: editar nome, e-mail e empresa
+
+### O que foi feito
+
+- A tabela ganhou **Editar**, reabrindo o mesmo modal com o telefone desabilitado.
+- Criar contato exige nome e telefone na tela e em `POST /api/contacts`. E-mail e empresa continuam opcionais.
+- A atualização envia só nome, e-mail e empresa no `PATCH`.
+
+### Por que
+
+- Não havia como corrigir um contato já cadastrado, e o telefone não deve mudar depois de criado.
+
+### Onde revisar
+
+- Modal em `src/components/contacts/create-contact-dialog.tsx`.
+- `useUpdateContactMutation` em `src/lib/api/hooks.ts`.
+- Nome obrigatório em `src/app/api/contacts/route.ts`.
+
+### Impacto
+
+- [x] Frontend
+- [x] Backend
+- [ ] DB
+- [ ] Deploy
+- [ ] DX
+
+### Risco / Atenção
+
+- Contato importado sem nome precisa receber um nome para salvar a edição.
+- O `PATCH` geral ainda aceita `phone` para outros fluxos; o modal de contatos não envia esse campo.
+
+### Como validar
+
+- Em `/contacts`, criar sem nome ou sem telefone deve avisar e não salvar.
+- **Editar** abre o modal com telefone travado; mudar nome, e-mail ou empresa atualiza a linha.
+
+---
+
 ## 2026-11-12 — contatos: busca no topo, tipos em linha e cadastro em modal
 
 ### O que foi feito

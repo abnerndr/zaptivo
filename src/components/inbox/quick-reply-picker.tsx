@@ -18,6 +18,7 @@ interface QuickReplyPickerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onPick: (qr: QuickReply) => void;
+  textOnly?: boolean;
 }
 
 /**
@@ -29,22 +30,29 @@ export function QuickReplyPicker({
   open,
   onOpenChange,
   onPick,
+  textOnly = false,
 }: QuickReplyPickerProps) {
   const t = useTranslations("Inbox.composer");
   const [items, setItems] = useState<QuickReply[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     setLoading(true);
+    setError(false);
     void (async () => {
       try {
         const res = await apiFetch("/api/quick-replies", { cache: "no-store" });
         const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error('Failed to load');
         if (!cancelled && res.ok) {
-          setItems((data.quick_replies as QuickReply[]) ?? []);
+          const replies = (data.quick_replies as QuickReply[]) ?? [];
+          setItems(textOnly ? replies.filter((reply) => reply.kind === 'text') : replies);
         }
+      } catch {
+        if (!cancelled) setError(true);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -52,7 +60,7 @@ export function QuickReplyPicker({
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, textOnly]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -65,6 +73,10 @@ export function QuickReplyPicker({
             <div className="flex justify-center py-8">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
+          ) : error ? (
+            <p className="py-8 text-center text-sm text-destructive" role="alert">
+              {t('quickRepliesError')}
+            </p>
           ) : items.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
               {t("quickRepliesEmpty")}

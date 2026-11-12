@@ -9,6 +9,8 @@ describe('contacts API type filter', () => {
       'utf8',
     )
     expect(src).toContain('typeId')
+    expect(src).toContain("typeId === 'none'")
+    expect(src).toContain('typeId: null')
     expect(src).toContain('contactType')
   })
 

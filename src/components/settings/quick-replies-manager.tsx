@@ -1,7 +1,7 @@
 "use client";
 import { apiFetch } from '@/lib/api/client'
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, MessageSquare, Pencil, Plus, Trash2, Zap } from "lucide-react";
 import { toast } from "sonner";
 
@@ -25,6 +25,7 @@ import {
   type InteractiveMessagePayload,
 } from "@/domain/whatsapp/interactive";
 import type { QuickReply, QuickReplyKind } from "@/types";
+import { inboxMessageVariables } from '@/domain/inbox/message-variables';
 
 interface DraftState {
   id?: string;
@@ -48,13 +49,17 @@ export function QuickRepliesManager() {
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [saving, setSaving] = useState(false);
+  const textRef = useRef<HTMLTextAreaElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const res = await apiFetch("/api/quick-replies", { cache: "no-store" });
       const data = await res.json().catch(() => ({}));
-      if (res.ok) setItems((data.quick_replies as QuickReply[]) ?? []);
+      if (!res.ok) throw new Error(data.error ?? 'Falha ao carregar modelos');
+      setItems((data.quick_replies as QuickReply[]) ?? []);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao carregar modelos');
     } finally {
       setLoading(false);
     }
@@ -78,7 +83,7 @@ export function QuickRepliesManager() {
   const save = useCallback(async () => {
     if (!draft) return;
     if (!draft.title.trim()) {
-      toast.error("Give the quick reply a name.");
+      toast.error("Informe o nome do modelo.");
       return;
     }
     const payload =
@@ -88,7 +93,7 @@ export function QuickRepliesManager() {
 
     setSaving(true);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         draft.id ? `/api/quick-replies/${draft.id}` : "/api/quick-replies",
         {
           method: draft.id ? "PATCH" : "POST",
@@ -98,14 +103,14 @@ export function QuickRepliesManager() {
       );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast.error(data.error ?? "Couldn't save the quick reply.");
+        toast.error(data.error ?? "Não foi possível salvar o modelo.");
         return;
       }
-      toast.success(draft.id ? "Quick reply updated." : "Quick reply created.");
+      toast.success(draft.id ? "Modelo atualizado." : "Modelo criado.");
       setDraft(null);
       await load();
     } catch {
-      toast.error("Couldn't save the quick reply.");
+      toast.error("Não foi possível salvar o modelo.");
     } finally {
       setSaving(false);
     }
@@ -113,13 +118,14 @@ export function QuickRepliesManager() {
 
   const remove = useCallback(
     async (id: string) => {
-      if (!window.confirm("Delete this quick reply?")) return;
-      const res = await apiFetch(`/api/quick-replies/${id}`, { method: "DELETE" });
-      if (!res.ok) {
-        toast.error("Couldn't delete the quick reply.");
-        return;
+      if (!window.confirm("Excluir este modelo?")) return;
+      try {
+        const res = await apiFetch(`/api/quick-replies/${id}`, { method: "DELETE" });
+        if (!res.ok) throw new Error();
+        await load();
+      } catch {
+        toast.error("Não foi possível excluir o modelo.");
       }
-      await load();
     },
     [load],
   );
@@ -127,12 +133,12 @@ export function QuickRepliesManager() {
   return (
     <div>
       <SettingsPanelHead
-        title="Quick replies"
-        description="Reusable snippets — plain text or a saved interactive message — that agents can insert from the inbox composer."
+        title="Modelos da inbox"
+        description="Crie e edite textos para reutilizar nas conversas. As variáveis são preenchidas com os dados de cada contato."
         action={
           <Button onClick={openCreate}>
             <Plus className="mr-1 h-4 w-4" />
-            New quick reply
+            Novo modelo
           </Button>
         }
       />
@@ -143,7 +149,7 @@ export function QuickRepliesManager() {
         </div>
       ) : items.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
-          No quick replies yet. Create one to reuse it across conversations.
+          Nenhum modelo criado. Adicione um texto para reutilizar na inbox.
         </p>
       ) : (
         <ul className="flex flex-col gap-2">
@@ -166,13 +172,14 @@ export function QuickRepliesManager() {
                 </p>
               </div>
               <div className="flex shrink-0 gap-1">
-                <Button variant="ghost" size="icon-sm" onClick={() => openEdit(qr)}>
+                <Button variant="ghost" size="icon-sm" onClick={() => openEdit(qr)} aria-label={`Editar ${qr.title}`}>
                   <Pencil className="h-4 w-4" />
                 </Button>
                 <Button
                   variant="ghost"
                   size="icon-sm"
                   onClick={() => remove(qr.id)}
+                  aria-label={`Excluir ${qr.title}`}
                   className="text-red-400 hover:bg-red-500/10 hover:text-red-300"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -186,53 +193,71 @@ export function QuickRepliesManager() {
       <Dialog open={!!draft} onOpenChange={(o) => !o && setDraft(null)}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{draft?.id ? "Edit quick reply" : "New quick reply"}</DialogTitle>
+            <DialogTitle>{draft?.id ? "Editar modelo" : "Novo modelo"}</DialogTitle>
           </DialogHeader>
           {draft && (
             <div className="max-h-[70vh] space-y-3 overflow-y-auto">
               <div>
-                <label className="mb-1 block text-xs text-muted-foreground">Name</label>
+                <label htmlFor="reply-title" className="mb-1 block text-xs text-muted-foreground">Nome</label>
                 <Input
+                  id="reply-title"
                   value={draft.title}
                   onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-                  placeholder="e.g. Business hours"
+                  placeholder="Ex.: Mensagem de boas-vindas"
                   className="bg-muted text-foreground"
                 />
               </div>
               <div className="flex gap-2">
                 <KindTab
                   active={draft.kind === "text"}
-                  label="Text"
+                  label="Texto"
                   onClick={() => setDraft({ ...draft, kind: "text" })}
                 />
                 <KindTab
                   active={draft.kind === "interactive"}
-                  label="Interactive"
+                  label="Interativa"
                   onClick={() => setDraft({ ...draft, kind: "interactive" })}
                 />
               </div>
-              {draft.kind === "text" ? (
+              {draft.kind === "text" ? (<>
+                <label htmlFor="reply-text" className="block text-xs text-muted-foreground">Mensagem</label>
                 <Textarea
+                  id="reply-text"
+                  ref={textRef}
                   value={draft.content_text}
                   onChange={(e) => setDraft({ ...draft, content_text: e.target.value })}
-                  placeholder="The message text to insert"
+                  placeholder="Olá {{first_name}}, como posso ajudar?"
                   className="min-h-28 bg-muted text-foreground"
                 />
+                <div className="flex flex-wrap gap-2">
+                  {inboxMessageVariables.map(({ key, label }) => (
+                    <button key={key} type="button" className="rounded border border-border px-2 py-1 text-xs hover:bg-muted" onClick={() => {
+                      const input = textRef.current;
+                      const start = input?.selectionStart ?? draft.content_text.length;
+                      const end = input?.selectionEnd ?? start;
+                      const token = `{{${key}}}`;
+                      setDraft({ ...draft, content_text: draft.content_text.slice(0, start) + token + draft.content_text.slice(end) });
+                      requestAnimationFrame(() => { input?.focus(); input?.setSelectionRange(start + token.length, start + token.length); });
+                    }}>{label} {'{{'}{key}{'}}'}</button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">A inbox mostra a prévia e alerta se algum dado do contato estiver faltando.</p>
+              </>
               ) : (
-                <InteractiveBuilder
+                <><p className="text-xs text-muted-foreground">Mensagens interativas não estão disponíveis na inbox atual.</p><InteractiveBuilder
                   value={draft.interactive_payload}
                   onChange={(p) => setDraft({ ...draft, interactive_payload: p })}
-                />
+                /></>
               )}
             </div>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setDraft(null)} disabled={saving}>
-              Cancel
+              Cancelar
             </Button>
             <Button onClick={save} disabled={saving}>
               {saving && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
-              Save
+              Salvar
             </Button>
           </DialogFooter>
         </DialogContent>

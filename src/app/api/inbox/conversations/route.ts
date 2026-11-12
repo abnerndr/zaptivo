@@ -45,6 +45,8 @@ export async function GET(req: Request) {
               id: c.contact.id,
               name: c.contact.name,
               phone: c.contact.phone,
+              email: c.contact.email,
+              company: c.contact.company,
               avatar_url: c.contact.avatarUrl,
             }
           : null,

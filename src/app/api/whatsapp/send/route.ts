@@ -26,6 +26,7 @@ export async function POST(req: Request) {
       template_message_params?: unknown
       interactive_payload?: unknown
       reply_to_message_id?: string
+      render_inbox_variables?: boolean
     }
 
     const result = await sendMessageToConversation(ctx.accountId, {
@@ -40,6 +41,7 @@ export async function POST(req: Request) {
       templateMessageParams: body.template_message_params,
       interactivePayload: body.interactive_payload as never,
       replyToMessageId: body.reply_to_message_id,
+      renderInboxVariables: body.render_inbox_variables === true,
     })
 
     return NextResponse.json(result)

@@ -14,7 +14,7 @@ export async function GET(req: Request) {
     const pageSize = Math.min(100, Math.max(1, Number(url.searchParams.get('pageSize') ?? 25)))
     const tagIds = url.searchParams.getAll('tagId')
     const typeId = url.searchParams.get('typeId')?.trim() ?? ''
-    if (typeId && !UUID_RE.test(typeId)) {
+    if (typeId && typeId !== 'none' && !UUID_RE.test(typeId)) {
       return NextResponse.json({ error: 'Tipo inválido' }, { status: 400 })
     }
 
@@ -32,7 +32,7 @@ export async function GET(req: Request) {
       ...(tagIds.length
         ? { contactTags: { some: { tagId: { in: tagIds } } } }
         : {}),
-      ...(typeId ? { typeId } : {}),
+      ...(typeId === 'none' ? { typeId: null } : typeId ? { typeId } : {}),
     }
 
     const [totalCount, rows] = await Promise.all([
@@ -92,7 +92,10 @@ export async function POST(req: Request) {
     if (!digits) {
       return NextResponse.json({ error: 'phone required' }, { status: 400 })
     }
-    const name = body.name?.trim() ? body.name.trim() : null
+    const name = typeof body.name === 'string' ? body.name.trim() : ''
+    if (!name) {
+      return NextResponse.json({ error: 'name required' }, { status: 400 })
+    }
     const contact = await prisma.contact.create({
       data: {
         accountId: ctx.accountId,
@@ -100,7 +103,7 @@ export async function POST(req: Request) {
         phone: digits,
         phoneNormalized: digits,
         name,
-        nameLocked: name !== null,
+        nameLocked: true,
         email: body.email ?? null,
         company: body.company ?? null,
       },

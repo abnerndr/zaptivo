@@ -15,6 +15,7 @@ import {
   isRecipientNotAllowedError,
 } from '@/domain/whatsapp/phone-utils'
 import { normalizeWahaMessageId } from '@/domain/whatsapp/message-id'
+import { renderInboxMessage } from '@/domain/inbox/message-variables'
 import { isLikelyLid, isLikelyPhoneNumber } from '@/domain/whatsapp/format-phone'
 import {
   resolveToPhoneNumber,
@@ -52,6 +53,7 @@ export interface SendMessageParams {
   templateMessageParams?: unknown
   interactivePayload?: InteractiveMessagePayload | null
   replyToMessageId?: string | null
+  renderInboxVariables?: boolean
 }
 
 export interface SendMessageResult {
@@ -168,6 +170,7 @@ export async function sendMessageToConversation(
     templateParams,
     interactivePayload,
     replyToMessageId,
+    renderInboxVariables,
   } = params
 
   if (!conversationId) {
@@ -204,6 +207,17 @@ export async function sendMessageToConversation(
 
   if (contact.blockedAt) {
     throw new SendMessageError('blocked', 'Contato na blacklist', 403)
+  }
+
+  let renderedContent = contentText
+  if (renderInboxVariables && (messageType === 'text' || isMediaKind) && contentText) {
+    const result = renderInboxMessage(contentText, contact)
+    if (result.missing.length || result.unknown.length) {
+      const variables = [...result.missing, ...result.unknown].map((key) => `{{${key}}}`).join(', ')
+      throw new SendMessageError('invalid_variables', `Variáveis sem valor ou desconhecidas: ${variables}`, 400)
+    }
+    renderedContent = result.text
+    validateSendMessageParams({ messageType, contentText: renderedContent, mediaUrl, templateName, interactivePayload })
   }
 
   const config = await prisma.whatsappConfig.findUnique({
@@ -255,7 +269,7 @@ export async function sendMessageToConversation(
     throw new SendMessageError('bad_request', 'Invalid phone number format', 400)
   }
 
-  let textToSend = contentText ?? ''
+  let textToSend = renderedContent ?? ''
 
   if (messageType === 'template' && templateName) {
     const template = await prisma.messageTemplate.findFirst({
@@ -336,7 +350,7 @@ export async function sendMessageToConversation(
       conversationId,
       senderType: 'agent',
       contentType: messageType,
-      contentText: interactiveBody ?? (messageType === 'template' ? textToSend : contentText) ?? null,
+      contentText: interactiveBody ?? (messageType === 'template' ? textToSend : renderedContent) ?? null,
       mediaUrl: mediaUrl || null,
       templateName: templateName || null,
       interactivePayload:
@@ -352,7 +366,7 @@ export async function sendMessageToConversation(
       ? interactivePayloadPreviewText(interactivePayload!)
       : messageType === 'template'
         ? textToSend
-        : contentText || `[${messageType}]`
+        : renderedContent || `[${messageType}]`
 
   await prisma.conversation.update({
     where: { id: conversationId },

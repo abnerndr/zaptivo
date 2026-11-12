@@ -5,6 +5,39 @@ Não edite entradas antigas — só acrescente no topo (mais recente primeiro).
 
 ---
 
+## 2026-11-12 — fix: busca obsoleta e foco na Inbox
+
+### O que foi feito
+
+- `src/app/(dashboard)/inbox/page.tsx`: resultados de contatos guardam a query que os gerou e só aparecem se igual à query atual; `searchGen` incrementa em toda execução do efeito (inclusive query curta); sem `setState` síncrono no efeito.
+- Após abrir a conversa, `composerRef.current?.focus()` é chamado direto; o efeito de foco segue para quando o compositor monta depois.
+
+### Por que
+
+- Resposta atrasada podia mostrar contatos de uma query antiga; abrir a conversa já selecionada não focava a mensagem.
+
+### Onde revisar
+
+- Efeito de busca, `contactSearch` e `openChat` na página da Inbox.
+
+### Impacto
+
+- [x] Frontend
+- [ ] Backend
+- [ ] DB
+- [ ] Deploy
+- [ ] DX
+
+### Risco / Atenção
+
+- Tela ainda não verificada no navegador.
+
+### Como validar
+
+- `npx tsc --noEmit --pretty false`, os 3 testes vitest da inbox e `npx eslint` na página.
+
+---
+
 ## 2026-11-12 — busca de contato ou número na Inbox
 
 ### O que foi feito

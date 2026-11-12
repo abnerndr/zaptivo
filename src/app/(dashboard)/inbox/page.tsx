@@ -140,15 +140,15 @@ export default function InboxPage() {
   const [savingContact, setSavingContact] = useState(false)
 
   const [query, setQuery] = useState('')
-  const [contactHits, setContactHits] = useState<
-    Array<{
+  const [contactSearch, setContactSearch] = useState<{
+    query: string
+    contacts: Array<{
       id: string
       name: string | null
       phone: string
       avatar_url: string | null
     }>
-  >([])
-  const [searchingContacts, setSearchingContacts] = useState(false)
+  }>({ query: '', contacts: [] })
   const [openingChat, setOpeningChat] = useState(false)
   const searchGen = useRef(0)
   const composerRef = useRef<HTMLInputElement | null>(null)
@@ -190,13 +190,8 @@ export default function InboxPage() {
 
   useEffect(() => {
     const q = query.trim()
-    if (q.length < 2) {
-      setContactHits([])
-      setSearchingContacts(false)
-      return
-    }
     const gen = ++searchGen.current
-    setSearchingContacts(true)
+    if (q.length < 2) return
     const timer = setTimeout(() => {
       void apiFetch(`/api/contacts?q=${encodeURIComponent(q)}&pageSize=20`)
         .then(async (res) => {
@@ -214,25 +209,29 @@ export default function InboxPage() {
         })
         .then((contacts) => {
           if (searchGen.current !== gen) return
-          setContactHits(contacts)
+          setContactSearch({ query: q, contacts })
         })
         .catch((err: unknown) => {
           if (searchGen.current !== gen) return
-          setContactHits([])
+          setContactSearch({ query: q, contacts: [] })
           toast.error(
             err instanceof Error ? err.message : 'Falha ao buscar contatos',
           )
-        })
-        .finally(() => {
-          if (searchGen.current === gen) setSearchingContacts(false)
         })
     }, 300)
     return () => clearTimeout(timer)
   }, [query])
 
+  const trimmedQuery = query.trim()
+  const contactHits =
+    contactSearch.query === trimmedQuery ? contactSearch.contacts : []
+  const searchingContacts =
+    trimmedQuery.length >= 2 && contactSearch.query !== trimmedQuery
+
   const results = useMemo(
     () => buildInboxStartResults({ query, conversations, contacts: contactHits }),
-    [query, conversations, contactHits],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- contactHits derives from contactSearch + trimmedQuery
+    [query, conversations, contactSearch],
   )
   const visibleConversations = query.trim() ? results.conversations : conversations
 
@@ -416,7 +415,10 @@ export default function InboxPage() {
           return [conversation, ...current]
         },
       )
-      focusComposerRef.current = true
+      if (selectedRef.current !== conversation.id) {
+        focusComposerRef.current = true
+      }
+      composerRef.current?.focus()
       setSelected(conversation.id)
       setQuery('')
     } catch (err) {

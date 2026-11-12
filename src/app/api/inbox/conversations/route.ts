@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/domain/db/prisma'
 import { requireSessionAccount } from '@/domain/auth/context'
+import { getOrgRolePermissions } from '@/domain/auth/org-roles'
+import { canSendMessages } from '@/domain/auth/roles'
+import {
+  InboxConversationError,
+  openInboxConversation,
+} from '@/domain/inbox/open-conversation'
 
 export async function GET(req: Request) {
   try {
@@ -46,6 +52,33 @@ export async function GET(req: Request) {
     })
   } catch (err) {
     if (err instanceof Response) return err
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    const ctx = await requireSessionAccount()
+    const permissions = await getOrgRolePermissions(ctx.profile.orgRoleId)
+    if (
+      ctx.role === 'viewer' ||
+      !canSendMessages({ accountRole: ctx.role, permissions })
+    ) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+    const body = (await req.json()) as { contactId?: string; phone?: string }
+    const opened = await openInboxConversation({
+      accountId: ctx.accountId,
+      contactId: body.contactId,
+      phone: body.phone,
+    })
+    return NextResponse.json(opened)
+  } catch (err) {
+    if (err instanceof Response) return err
+    if (err instanceof InboxConversationError) {
+      return NextResponse.json({ error: err.message }, { status: err.status })
+    }
+    console.error('[inbox/conversations POST]', err)
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

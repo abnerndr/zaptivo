@@ -567,7 +567,7 @@ export default function InboxPage() {
           results.contacts.length === 0 &&
           !results.startPhone ? (
             <p className="p-4 text-sm text-muted-foreground">
-              Nenhum contato encontrado.
+              Nenhum contato encontrado
             </p>
           ) : null}
           {!query.trim() && conversations.length === 0 ? (

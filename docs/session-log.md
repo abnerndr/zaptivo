@@ -5,6 +5,41 @@ Não edite entradas antigas — só acrescente no topo (mais recente primeiro).
 
 ---
 
+## 2026-11-12 — webhook do WhatsApp sem sessão
+
+### O que foi feito
+
+- `POST /webhook/whatsapp` e `POST /api/whatsapp/webhook` passam pelo proxy de autenticação sem cookie de navegador.
+- A resposta dessa rota deixa de ser cacheável como página HTML.
+
+### Por que
+
+- O callback da WuzAPI recebia redirecionamento para `/login` e a mensagem nunca era gravada. A inbox só mudava quando a tela era recarregada.
+
+### Onde revisar
+
+- `src/auth.config.ts` e `next.config.ts`.
+
+### Impacto
+
+- [ ] Frontend
+- [x] Backend
+- [ ] DB
+- [x] Deploy
+- [ ] DX
+
+### Risco / Atenção
+
+- A rota continua exigindo o token da conta. Sem publicar esta versão, a produção segue redirecionando o callback.
+- Mensagens recebidas enquanto o callback era recusado não foram gravadas.
+
+### Como validar
+
+- `pnpm exec vitest run src/auth.config.test.ts`
+- Depois do deploy, `POST /webhook/whatsapp` sem cookie deve responder 401 com token inválido, não 302 para `/login`. Uma mensagem nova no WhatsApp deve aparecer na inbox aberta.
+
+---
+
 ## 2026-11-12 — modelos de mensagem na inbox
 
 ### O que foi feito

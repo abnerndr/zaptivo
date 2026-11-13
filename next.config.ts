@@ -105,7 +105,13 @@ const nextConfig: NextConfig = {
         headers: [{ key: "Cache-Control", value: "no-store" }],
       },
       {
-        source: "/:path((?!_next/static|_next/image|api).*)",
+        // The WhatsApp callback is not an HTML page. A shared cache must
+        // not keep a login redirect or a previous event response.
+        source: "/webhook/:path*",
+        headers: [{ key: "Cache-Control", value: "no-store" }],
+      },
+      {
+        source: "/:path((?!_next/static|_next/image|api|webhook).*)",
         headers: [
           {
             key: "Cache-Control",

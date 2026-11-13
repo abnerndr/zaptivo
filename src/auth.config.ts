@@ -58,6 +58,10 @@ export const authConfig = {
         pathname.startsWith('/forgot-password') ||
         pathname.startsWith('/join') ||
         pathname.startsWith('/api/auth') ||
+        // WuzAPI posts here with the account token. The route checks that
+        // token; a session redirect drops the event before it is stored.
+        pathname.startsWith('/webhook/') ||
+        pathname === '/api/whatsapp/webhook' ||
         pathname === '/'
 
       if (isPublic) {
